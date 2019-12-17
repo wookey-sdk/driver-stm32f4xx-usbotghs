@@ -40,6 +40,7 @@ typedef struct {
     usbotghs_ep_state_t state;         /* EP current state */
 
     physaddr_t          *fifo;         /* associated RAM FIFO */
+    uint32_t             fifo_idx;     /* current FIFO index */
     uint32_t             fifo_size;    /* associated RAM FIFO */
 } usbotghs_ep_t;
 
