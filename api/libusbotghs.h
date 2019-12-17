@@ -56,12 +56,12 @@ typedef enum {
  * INFO: Remember that USB protocol direction is defined from the host point of view.
  * Receptions are made on OUT endpoints, transmission on IN endpoints.
  */
-mbed_error_t (*setup_pkt_handler)(uint8_t *setup_pkt,
-                                  uint32_t dev_id);
+typedef mbed_error_t (*setup_pkt_handler_t)(uint8_t *setup_pkt,
+                                            uint32_t dev_id);
 
-mbed_error_t (*data_pkt_handler)(uint8_t *data_pkt,
-                                 uint8_t ep_num,
-                                 uint8_t dev_id);
+typedef mbed_error_t (*data_pkt_handler_t)(uint8_t *data_pkt,
+                                           uint8_t ep_num,
+                                   uint8_t dev_id);
 
 /********************************************************************************
  * About functional API
