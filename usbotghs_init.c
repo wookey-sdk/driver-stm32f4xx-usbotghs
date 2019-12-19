@@ -276,14 +276,7 @@ mbed_error_t usbotghs_initialize_device(void)
                  USBOTG_HS_GINTMSK_USBSUSPM_Msk |
                  USBOTG_HS_GINTMSK_SOFM_Msk);
 
-#if 0
-    /* these are handled by USB reset handler */
-                 USBOTG_HS_GINTMSK_OEPINT_Msk   |
-                 USBOTG_HS_GINTMSK_IEPINT_Msk   |
-				 USBOTG_HS_GINTMSK_RXFLVLM_Msk);
-#endif
     return errcode;
-
 }
 
 /*

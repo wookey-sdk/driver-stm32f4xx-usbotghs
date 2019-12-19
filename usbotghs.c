@@ -23,14 +23,19 @@
  */
 #include "autoconf.h"
 
-#include "usbotghs.h"
-#include "usbotghs_regs.h"
-#include "api/libusbotghs.h"
 #include "libc/syscall.h"
 #include "libc/stdio.h"
 #include "libc/nostd.h"
 #include "libc/string.h"
 #include "generated/usb_otg_hs.h"
+
+#include "api/libusbotghs.h"
+#include "usbotghs.h"
+#include "usbotghs_init.h"
+#include "usbotghs_handler.h"
+#include "usbotghs_regs.h"
+#include "ulpi.h"
+
 
 #define ZERO_LENGTH_PACKET 0
 #define OUT_NAK		0x01
@@ -45,44 +50,6 @@
 #define USBOTG_HS_TX_FIFO_SZ	512
 
 #define USBOTG_HS_DEBUG 0
-
-/******************************************************************
- * First, defining Handlers
- *
- *
- */
-
-/**
- * \brief Manage IRQ handler calls.
- *
- * IRQ Handlers as defined in startup_stm32f4xx.s
- */
-void USBOTGHS_IRQHandler(uint8_t irq __UNUSED, // IRQ number
-                         uint32_t sr,  // content of posthook.status,
-                         uint32_t dr)  // content of posthook.data)
-
-{
-	uint8_t i;
-	uint32_t intsts = sr;
-	uint32_t intmsk = dr;
-
-	if (intsts & USBOTG_HS_GINTSTS_CMOD_Msk){
-		log_printf("[USB FS] Int in Host mode !\n");
-	}
-    uint32_t val = intsts;
-    val &= intmsk;
-
-	for (i = 0; val; i++,val>>=1) {
-		/* Below code is equivalent to
-         * calculating (!(intsts & ((uint32_t)1 << i)) || !(intmsk & ((uint32_t)1 << i)))
-         */
-        if (val & 1)
-        {
-            // TODO usb_hs_isr_handlers[i]();
-        }
-    }
-}
-
 
 /******************************************************************
  * Defining functional API
@@ -289,12 +256,6 @@ mbed_error_t usbotghs_declare(void)
  *
  * At this point, the device is ready to accept SOF packets and perform control transfers on control endpoint 0.
  */
-
-#include "api/libusbotghs.h"
-#include "usbotghs.h"
-#include "usbotghs_init.h"
-#include "ulpi.h"
-
 //static mbed_error_t usbotghs_core_init;
 
 mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)

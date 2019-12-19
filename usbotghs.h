@@ -98,47 +98,4 @@ typedef struct {
 } usbotghs_context_t;
 
 
-/*
- * interrupt flag bit identifier, as set in the INTSTS global interrupt status register
- * Some of these interrupts required an execution of a stack level handler, other not.
- *
- * When an interrupt is handled, all the bits must be checked against the following
- * bitfield definition, as multiple event may occur in the same time, and as a consequence be
- * handled in the same ISR.
- */
-typedef enum {
-    USBOTGHS_IT_CMOD       = 0,    /*< Current Mode of Operation  */
-    USBOTGHS_IT_MMIS       = 1,    /*< Mode mismatch */
-    USBOTGHS_IT_OTGINT     = 2,    /*< OTG interrupt */
-    USBOTGHS_IT_SOF        = 3,    /*< Start of Frame */
-    USBOTGHS_IT_XFLVL      = 4,    /*< RxFifo non-empty */
-    USBOTGHS_IT_NPTXE      = 5,    /*< Non-periodic TxFIFO empty (Host mode) */
-    USBOTGHS_IT_GINAKEFF   = 6,    /*< Global IN NAK effective */
-    USBOTGHS_IT_GONAKEFF   = 7,    /*< Global OUT NAK effective*/
-    USBOTGHS_IT_RESERVED8  = 8,    /*< Reserved */
-    USBOTGHS_IT_RESERVED9  = 9,    /*< Reserved */
-    USBOTGHS_IT_ESUSP      = 10,   /*< Early suspend */
-    USBOTGHS_IT_USBSUSB    = 11,   /*< USB Suspend */
-    USBOTGHS_IT_USBRST     = 12,   /*< Reset */
-    USBOTGHS_IT_ENUMDNE    = 13,   /*< Speed enumeration done */
-    USBOTGHS_IT_ISOODRP    = 14,   /*< Isochronous OUT pkt dropped */
-    USBOTGHS_IT_EOPF       = 15,   /*< End of periodic frame */
-    USBOTGHS_IT_RESERVED16 = 16,   /*< Reserved */
-    USBOTGHS_IT_EPMISM     = 17,   /*< Endpoint mismatch */
-    USBOTGHS_IT_IEPINT     = 18,   /*< IN Endpoint event */
-    USBOTGHS_IT_OEPINT     = 19,   /*< OUT Endpoint event */
-    USBOTGHS_IT_IISOIXFR   = 20,   /*< Incomplete Isochronous IN transfer */
-    USBOTGHS_IT_IPXFR      = 21,   /*< Incomplete periodic transfer */
-    USBOTGHS_IT_RESERVED22 = 22,   /*< Reserved */
-    USBOTGHS_IT_RESERVED23 = 23,   /*< Reserved */
-    USBOTGHS_IT_HPRTINT    = 24,   /*< Host port event (Host mode) */
-    USBOTGHS_IT_HCINTT     = 25,   /*< Host channels event (Host mode) */
-    USBOTGHS_IT_PTXFE      = 26,   /*< Periodic TxFIFO empty (Host mode) */
-    USBOTGHS_IT_RESERVED27 = 27,   /*< Reserved */
-    USBOTGHS_IT_CIDSCHG    = 28,   /*< Connector ID status change */
-    USBOTGHS_IT_DISCINT    = 29,   /*< Disconnect event (Host mode) */
-    USBOTGHS_IT_SRQINT     = 30,   /*< Session request/new session event*/
-    USBOTGHS_IT_WKUPINT    = 31,   /*< Resume/Wakeup event */
-} usbotghs_int_id_t;
-
 #endif /*!USBOTGHS_H_ */
