@@ -1,3 +1,27 @@
+/*
+ *
+ * Copyright 2018 The wookey project team <wookey@ssi.gouv.fr>
+ *   - Ryad     Benadjila
+ *   - Arnauld  Michelizza
+ *   - Mathieu  Renard
+ *   - Philippe Thierry
+ *   - Philippe Trebuchet
+ *
+ * This package is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * the Free Software Foundation; either version 2.1 of the License, or (at
+ * ur option) any later version.
+ *
+ * This package is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along
+ * with this package; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ *
+ */
+
 #ifndef USBOTGHS_H_
 # define USBOTGHS_H_
 
@@ -9,6 +33,8 @@
 #include "api/libusbotghs.h"
 #include "usbotghs_regs.h"
 
+#define USBOTGHS_REG_CHECK_TIMEOUT 50
+
 #define MAX_TIME_DETACH     4000
 
 #define USB_GLOBAL_OUT_NAK        0b0001 /* Global OUT NAK (triggers an interrupt) */
@@ -17,6 +43,20 @@
 #define USB_SETUP_TRANS_COMPLETED 0b0100 /* SETUP transaction completed (triggers an interrupt) */
 #define USB_SETUP_PACKET_RECEIVED 0b0110 /* SETUP data packet received */
 
+
+/*********************************************************
+ * General tooling
+ */
+
+#if CONFIG_USR_DRV_USBOTGHS_DEBUG
+# define log_printf(...) printf(__VA_ARGS__)
+#else
+# define log_printf(...)
+#endif
+
+/********************************************************
+ * Driver private structures and types
+ */
 
 /* setup packet, to be passed to upper libctrl */
 
@@ -50,6 +90,7 @@ typedef struct {
     uint8_t             id;              /* device unique identifier, from generated header */
     device_t            dev;             /* associated device_t structure */
     int                 dev_desc;        /* device descriptor */
+    usbotghs_dev_mode_t mode;            /* current OTG mode (host or device) */
     usbotghs_ep_t       in_eps[8];       /* list of HW supported IN EPs */
     usbotghs_ep_t       out_eps[3];      /* list of HW supported OUT EPs */
     setup_pkt_handler_t setup_handler;   /* setup and events handler */

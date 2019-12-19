@@ -1,10 +1,26 @@
-/** @file stm32f4xx_usb_fs.c
- * \brief Driver for STM32F4x5/4x7 device
+/*
  *
- * This driver is written according to STM32F4x5_4x7 reference manual
- * (ref. RM0090) Rev 11.
- **/
-
+ * Copyright 2019 The wookey project team <wookey@ssi.gouv.fr>
+ *   - Ryad     Benadjila
+ *   - Arnauld  Michelizza
+ *   - Mathieu  Renard
+ *   - Philippe Thierry
+ *   - Philippe Trebuchet
+ *
+ * This package is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * the Free Software Foundation; either version 2.1 of the License, or (at
+ * ur option) any later version.
+ *
+ * This package is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along
+ * with this package; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ *
+ */
 #include "autoconf.h"
 
 #include "usbotghs.h"
@@ -14,6 +30,7 @@
 #include "libc/stdio.h"
 #include "libc/nostd.h"
 #include "libc/string.h"
+#include "generated/usb_otg_hs.h"
 
 #define ZERO_LENGTH_PACKET 0
 #define OUT_NAK		0x01
@@ -24,16 +41,10 @@
 
 #define USB_REG_CHECK_TIMEOUT 50
 
-#define USB_HS_RX_FIFO_SZ 	512
-#define USB_HS_TX_FIFO_SZ	512
+#define USBOTG_HS_RX_FIFO_SZ 	512
+#define USBOTG_HS_TX_FIFO_SZ	512
 
-#define USB_HS_DEBUG 0
-
-#if USB_HS_DEBUG
-#define log_printf(...) aprintf(__VA_ARGS__)
-#else
-#define log_printf(...) {};
-#endif
+#define USBOTG_HS_DEBUG 0
 
 /******************************************************************
  * First, defining Handlers
@@ -55,7 +66,7 @@ void USBOTGHS_IRQHandler(uint8_t irq __UNUSED, // IRQ number
 	uint32_t intsts = sr;
 	uint32_t intmsk = dr;
 
-	if (intsts & USB_HS_GINTSTS_CMOD_Msk){
+	if (intsts & USBOTG_HS_GINTSTS_CMOD_Msk){
 		log_printf("[USB FS] Int in Host mode !\n");
 	}
     uint32_t val = intsts;
@@ -133,21 +144,21 @@ mbed_error_t usbotghs_declare(void)
     ctx.dev.irqs[0].posthook.action[3].instr = IRQ_PH_AND;
     ctx.dev.irqs[0].posthook.action[3].and.offset_dest = 0x18; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[3].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[3].and.mask = USB_HS_GINTMSK_RXFLVLM_Msk; /* MASK register offset */
+    ctx.dev.irqs[0].posthook.action[3].and.mask = USBOTG_HS_GINTMSK_RXFLVLM_Msk; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[3].and.mode = 1; /* binary inversion */
 
 
     ctx.dev.irqs[0].posthook.action[4].instr = IRQ_PH_AND;
     ctx.dev.irqs[0].posthook.action[4].and.offset_dest = 0x18; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[4].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[4].and.mask = USB_HS_GINTMSK_IEPINT_Msk; /* MASK register offset */
+    ctx.dev.irqs[0].posthook.action[4].and.mask = USBOTG_HS_GINTMSK_IEPINT_Msk; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[4].and.mode = 1; /* binary inversion */
 
 
     ctx.dev.irqs[0].posthook.action[5].instr = IRQ_PH_AND;
     ctx.dev.irqs[0].posthook.action[5].and.offset_dest = 0x18; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[5].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[5].and.mask = USB_HS_GINTMSK_OEPINT_Msk; /* MASK register offset */
+    ctx.dev.irqs[0].posthook.action[5].and.mask = USBOTG_HS_GINTMSK_OEPINT_Msk; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[5].and.mode = 1; /* binary inversion */
 
 
@@ -176,7 +187,7 @@ mbed_error_t usbotghs_declare(void)
     ctx.dev.gpios[1].afr          = GPIO_AF_OTG_HS;
 
     for (uint8_t i = USB_HS_ULPI_D1; i <= USB_HS_ULPI_D7; ++i) {
-        /* INFO: for this loop to work, USB_HS_ULPI_D1 must start at index 2
+        /* INFO: for this loop to work, USBOTG_HS_ULPI_D1 must start at index 2
          * in the JSON file */
         /* ULPI_Di */
         ctx.dev.gpios[i].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
@@ -237,9 +248,92 @@ mbed_error_t usbotghs_declare(void)
     return MBED_ERROR_NONE;
 }
 
-mbed_error_t usbotghs_initialize(void)
+
+/*
+ * This function initialize the USB OTG HS Core.
+ *
+ * The driver must meet the following conditions to set up the device core to handle traffic:
+ *
+ *  -  In Slave mode, GINTMSK.NPTxFEmpMsk, and GINTMSK.RxFLvlMsk must be unset.
+ *  -  In DMA mode, the GINTMSK.NPTxFEmpMsk, and GINTMSK.RxFLvlMsk interrupts must be masked.
+ *
+ * The driver must perform the following steps to initialize the core at device on, power on, or after a
+ * mode change from Host to Device.
+ *
+ * 1. Program the following fields in DCFG register.
+ *  -  DescDMA bit (applicable only if OTG_EN_DESC_DMA parameter is set to high)
+ *  -  Device Speed
+ *  -  NonZero Length Status OUT Handshake
+ *  - Periodic Frame Interval (If Periodic Endpoints are supported)
+ *
+ * 2. Program the Device threshold control register.
+ *    This is required only if you are using DMA mode and you are planning to enable thresholding.
+ *
+ * 3. Clear the DCTL.SftDiscon bit. The core issues a connect after this bit is cleared.
+ *
+ * 4. Program the GINTMSK register to unmask the following interrupts.
+ * -  USB Reset
+ * -  Enumeration Done
+ * -  Early Suspend
+ * -  USB Suspend
+ * -  SOF
+ *
+ * 5. Wait for the GINTSTS.USBReset interrupt, which indicates a reset has been detected on the USB and
+ *    lasts for about 10 ms. On receiving this interrupt, the application must perform the steps listed in
+ *    "Initialization on USB Reset" on page 157.
+ *
+ * 6. Wait for the GINTSTS.EnumerationDone interrupt. This interrupt indicates the end of reset on the
+ * USB. On receiving this interrupt, the application must read the DSTS register to determine the
+ * enumeration speed and perform the steps listed in “Initialization on Enumeration Completion” on
+ * page 158.
+ *
+ * At this point, the device is ready to accept SOF packets and perform control transfers on control endpoint 0.
+ */
+
+#include "api/libusbotghs.h"
+#include "usbotghs.h"
+#include "usbotghs_init.h"
+#include "ulpi.h"
+
+//static mbed_error_t usbotghs_core_init;
+
+mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+    /* First, reset the PHY device connected to the core through ULPI interface */
+    if ((errcode = usbotghs_ulpi_reset()) != MBED_ERROR_NONE) {
+        goto err;
+    }
+    /* first, we need to initialize the core */
+    log_printf("[USB HS] initialize the Core\n");
+    if ((errcode = usbotghs_initialize_core(mode)) != MBED_ERROR_NONE) {
+        goto err;
+    }
+    /* host/device mode */
+    switch (mode) {
+        case USBOTGHS_MODE_HOST: {
+            log_printf("[USB HS][HOST] initialize in Host mode\n");
+            if ((errcode = usbotghs_initialize_host()) != MBED_ERROR_NONE) {
+                goto err;
+            }
+            /* IT Indicates that Periodic TxFIFO is half empty */
+            break;
+        }
+        case USBOTGHS_MODE_DEVICE: {
+            log_printf("[USB HS][DEVICE] initialize in Host mode\n");
+            if ((errcode = usbotghs_initialize_device()) != MBED_ERROR_NONE) {
+                goto err;
+            }
+            break;
+        }
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+            break;
+    }
+    ctx.mode = mode;
+
+err:
     return errcode;
 }
 
@@ -348,9 +442,9 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep)
  * in compliance with the currently enabled configuration and interface(s)
  * hold by the libUSBCtrl
  */
-mbed_error_t usbotghs_configure_endpoint(uint8_t               id,
-                                         usbotghs_ep_type_t    type,
-                                         usbotghs_ep_mpsize_t  mpsize)
+mbed_error_t usbotghs_configure_endpoint(uint8_t                id,
+                                         usbotghs_ep_type_t     type,
+                                         usbotghs_epx_mpsize_t  mpsize)
 {
 
     mbed_error_t errcode = MBED_ERROR_NONE;

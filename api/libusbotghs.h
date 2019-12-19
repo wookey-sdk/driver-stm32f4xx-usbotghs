@@ -1,41 +1,107 @@
-#ifndef STM32F4XX_USB_H
-#define STM32F4XX_USB_H
+/*
+ *
+ * Copyright 2019 The wookey project team <wookey@ssi.gouv.fr>
+ *   - Ryad     Benadjila
+ *   - Arnauld  Michelizza
+ *   - Mathieu  Renard
+ *   - Philippe Thierry
+ *   - Philippe Trebuchet
+ *
+ * This package is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * the Free Software Foundation; either version 2.1 of the License, or (at
+ * ur option) any later version.
+ *
+ * This package is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along
+ * with this package; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ *
+ */
+#ifndef LIBUSBOTGHS_H_
+#define LIBUSBOTGHS_H_
 
 #include "libc/types.h"
 #include "autoconf.h"
 
-#define EP0 USB_HS_DXEPCTL_EP0
+
+/*
+ * EP name abstraction
+ */
+#define EP0 USBOTG_HS_EP0
+#define EP1 USBOTG_HS_EP1
+#define EP2 USBOTG_HS_EP2
+#define EP3 USBOTG_HS_EP3
+#define EP4 USBOTG_HS_EP4
+#define EP5 USBOTG_HS_EP5
+#define EP6 USBOTG_HS_EP6
+#define EP7 USBOTG_HS_EP7
 
 #define MAX_DATA_PACKET_SIZE(ep) (((ep) == 0) ? 64 : 512)
 
+/*
+ * The USB OTG support On-The-Go configuration (i.e. Host or Device mode, configurable
+ * by software stack. This enumerate define which mode to use
+ */
 typedef enum {
-    USB_HS_DXEPCTL_EP0 = 0,
-    USB_HS_DXEPCTL_EP1 = 1,
-    USB_HS_DXEPCTL_EP2 = 2,
-    USB_HS_DXEPCTL_EP3 = 3,
-} usb_ep_nb_t;
+    USBOTGHS_MODE_HOST,
+    USBOTGHS_MODE_DEVICE
+} usbotghs_dev_mode_t;
 
+/*
+ * Device Endpoint identifiers
+ */
 typedef enum {
-    USB_HS_D0EPCTL_MPSIZ_64BYTES = 0,
-    USB_HS_D0EPCTL_MPSIZ_32BYTES = 1,
-    USB_HS_D0EPCTL_MPSIZ_16BYTES = 2,
-    USB_HS_D0EPCTL_MPSIZ_8BYTES  = 3,
-    USB_HS_DXEPCTL_MPSIZ_64BYTES = 64,
-    USB_HS_DXEPCTL_MPSIZ_128BYTES = 128,
-    USB_HS_DXEPCTL_MPSIZ_512BYTES = 512,
-    USB_HS_DXEPCTL_MPSIZ_1024BYTES  = 1024,
-} usbotghs_ep_mpsize_t;
+    USBOTG_HS_EP0 = 0,
+    USBOTG_HS_EP1 = 1,
+    USBOTG_HS_EP2 = 2,
+    USBOTG_HS_EP3 = 3,
+    USBOTG_HS_EP4 = 4,
+    USBOTG_HS_EP5 = 5,
+    USBOTG_HS_EP6 = 6,
+    USBOTG_HS_EP7 = 7,
+} usbotghs_ep_nb_t;
+
+/*
+ * Max packet size in EP0 is a specific field.
+ * Here are the supported size
+ */
+typedef enum {
+    USBOTG_HS_EP0_MPSIZE_64BYTES = 0,
+    USBOTG_HS_EP0_MPSIZE_32BYTES = 1,
+    USBOTG_HS_EP0_MPSIZE_16BYTES = 2,
+    USBOTG_HS_EP0_MPSIZE_8BYTES  = 3,
+} usbotghs_ep0_mpsize_t;
+
+
+/*
+ * Other EPs support various sizes for their
+ * max packet size. Although, we limit these size to
+ * various standard sizes.
+ */
+typedef enum {
+    USBOTG_HS_EPx_MPSIZE_64BYTES = 64,
+    USBOTG_HS_EPx_MPSIZE_128BYTES = 128,
+    USBOTG_HS_EPx_MPSIZE_512BYTES = 512,
+    USBOTG_HS_EPx_MPSIZE_1024BYTES  = 1024,
+} usbotghs_epx_mpsize_t;
 
 typedef enum {
     USB_HS_DXEPCTL_SD0PID_SEVNFRM  = 0,
     USB_HS_DXEPCTL_SD1PID_SODDFRM
 } usb_ep_toggle_t;
 
+/*
+ * USB standard EP type
+ */
 typedef enum {
-    USB_HS_DXEPCTL_EPTYP_CONTROL = 0,
-    USB_HS_DXEPCTL_EPTYP_ISOCHRO = 1,
-    USB_HS_DXEPCTL_EPTYP_BULK    = 2,
-    USB_HS_DXEPCTL_EPTYP_INT     = 3,
+    USBOTG_HS_EP_TYPE_CONTROL     = 0,
+    USBOTG_HS_EP_TYPE_ISOCHRONOUS = 1,
+    USBOTG_HS_EP_TYPE_BULK        = 2,
+    USBOTG_HS_EP_TYPE_INT         = 3,
 } usbotghs_ep_type_t;
 
 
@@ -84,7 +150,7 @@ mbed_error_t usbotghs_declare(void);
  * Core initial setup and config. At the end of the initialization, the Core should
  * have its USB control pipe ready to receive the first requests from the host.
  */
-mbed_error_t usbotghs_initialize(void);
+mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode);
 
 /*
  * Sending data (whatever data type is (i.e. status on control pipe or data on
@@ -140,7 +206,7 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep);
  */
 mbed_error_t usbotghs_configure_endpoint(uint8_t               id,
                                          usbotghs_ep_type_t    type,
-                                         usbotghs_ep_mpsize_t  mpsize);
+                                         usbotghs_epx_mpsize_t mpsize);
 
 /*
  * Deconfigure the given EP. The EP is no more usable after this call. A new configuration
@@ -162,4 +228,4 @@ void usbotghs_bind(void);
 
 void usbotghs_unbind(void);
 
-#endif /* STM32F4XX_USB_H */
+#endif /*!LIBUSBOTGHS_H_ */
