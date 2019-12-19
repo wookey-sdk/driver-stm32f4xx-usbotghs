@@ -92,7 +92,7 @@ typedef enum {
 typedef enum {
     USB_HS_DXEPCTL_SD0PID_SEVNFRM  = 0,
     USB_HS_DXEPCTL_SD1PID_SODDFRM
-} usb_ep_toggle_t;
+} usbotghs_ep_toggle_t;
 
 /*
  * USB standard EP type
@@ -194,7 +194,10 @@ mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep);
 /*
  * Activate the given EP (for e.g. to transmit data)
  */
-mbed_error_t usbotghs_activate_endpoint(uint8_t ep);
+mbed_error_t usbotghs_activate_endpoint(uint8_t               ep,
+                                        usbotghs_ep_type_t    type,
+                                        usbotghs_epx_mpsize_t mpsize,
+                                        usbotghs_ep_toggle_t  dtoggle);
 
 /*
  * Deactivate the given EP (Its configuration is keeped, the EP is *not* deconfigured)

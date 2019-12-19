@@ -84,6 +84,8 @@ typedef struct {
     uint32_t             fifo_size;    /* associated RAM FIFO */
 } usbotghs_ep_t;
 
+#define USBOTGHS_MAX_IN_EP   8
+#define USBOTGHS_MAX_OUT_EP  3
 
 /* current context of the USB OTG HS Core */
 typedef struct {
@@ -91,11 +93,12 @@ typedef struct {
     device_t            dev;             /* associated device_t structure */
     int                 dev_desc;        /* device descriptor */
     usbotghs_dev_mode_t mode;            /* current OTG mode (host or device) */
-    usbotghs_ep_t       in_eps[8];       /* list of HW supported IN EPs */
-    usbotghs_ep_t       out_eps[3];      /* list of HW supported OUT EPs */
+    usbotghs_ep_t       in_eps[USBOTGHS_MAX_IN_EP];       /* list of HW supported IN EPs */
+    usbotghs_ep_t       out_eps[USBOTGHS_MAX_OUT_EP];      /* list of HW supported OUT EPs */
     setup_pkt_handler_t setup_handler;   /* setup and events handler */
     data_pkt_handler_t  data_handler;    /* data (non-control) handler */
 } usbotghs_context_t;
 
+usbotghs_context_t *usbotghs_get_context(void);
 
 #endif /*!USBOTGHS_H_ */

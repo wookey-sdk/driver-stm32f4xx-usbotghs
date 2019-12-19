@@ -62,6 +62,11 @@ static const char *devname = "usb-otg-hs";
 /* local context. Only one as there is one USB OTG device per SoC */
 static volatile usbotghs_context_t ctx = { 0 };
 
+usbotghs_context_t *usbotghs_get_context(void)
+{
+    return (usbotghs_context_t *)&ctx;
+}
+
 mbed_error_t usbotghs_declare(void)
 {
     e_syscall_ret ret = 0;
@@ -377,17 +382,28 @@ mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep)
 }
 
 /*
- * Activate EP (for e.g. before sending data)
+ * Activate EP (for e.g. before sending data). It can also be used in order to
+ * configure a new endpoint with the given configuration (type, mode, data toggle,
+ * FIFO informations)
  */
-mbed_error_t usbotghs_activate_endpoint(uint8_t ep)
+mbed_error_t usbotghs_activate_endpoint(uint8_t               ep,
+                                        usbotghs_ep_type_t    type,
+                                        usbotghs_epx_mpsize_t mpsize,
+                                        usbotghs_ep_toggle_t  dtoggle)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     ep = ep;
+    type = type;
+    mpsize = mpsize;
+    dtoggle = dtoggle;
     return errcode;
 }
 
 /*
- * Deactivate EP
+ * Dectivate EP.
+ * This can be requested on SetConfiguration or SetInterface, when
+ * a configuration change is required, which implies that some old EPs need to be
+ * removed before creating new ones.
  */
 mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep)
 {

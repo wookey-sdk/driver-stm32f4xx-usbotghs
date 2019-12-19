@@ -33,6 +33,13 @@
 #include "usbotghs_handler.h"
 
 /************************************************
+ * Buffers (FIFO storage in RAM
+ */
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+uint8_t ep0_fifo[512] = {0};
+#endif
+
+/************************************************
  * About ISR handlers
  */
 /*
@@ -96,14 +103,59 @@ static mbed_error_t reserved_handler(void)
 }
 
 /*
- * USB Reset handler. Handling USB reset requests. These requests can be received in various
- * state and handle a core soft reset and configuration.
+ * USB Reset handler. Handling USB reset requests. These requests can be received in
+ * various state and handle a core soft reset and configuration.
+ *
+ * 1. Set the NAK bit for all OUT endpoints:
+ *  - DOEPCTLn.SNAK = 1 (for all OUT endpoints)
+ * Unmask the following interrupt bits:
+ *  - DAINTMSK.INEP0 = 1 (control 0 IN endpoint)
+ *  - DAINTMSK.OUTEP0 = 1 (control 0 OUT endpoint)
+ *  - DOEPMSK.SETUP = 1
+ *  - DOEPMSK.XferCompl = 1
+ *  - DIEPMSK.XferCompl = 1
+ *  - DIEPMSK.TimeOut = 1
+ *
+ *  3. To transmit or receive data, the device must initialize more registers as
+ *  specified in Device Initialization on page 154.
+ *
+ *  4. Set up the Data FIFO RAM for each of the FIFOs (only if Dynamic FIFO Sizing is
+ *  enabled)
+ *  - Program the GRXFSIZ Register, to be able to receive control OUT data and setup
+ *    data. If thresholding is not enabled, at a minimum, this must be equal to 1 max
+ *    packet size of control endpoint 0 + 2 DWORDs (for the status of the control OUT
+ *    data packet) + 10 DWORDs (for setup packets). If thresholding is enabled, at a
+ *    minimum, this must be equal to 2 * (DTHRCTL.RxThrLen/4 + 1) + 2 DWORDs (for the
+ *    status of the control OUT data packet) + 10 DWORDs (for setup packets)
+ *  - Program the GNPTXFSIZ Register in Shared FIFO operation or dedicated FIFO size
+ *    register (depending on the FIFO number chosen) in Dedicated FIFO operation, to
+ *    be able to transmit control IN data. At a minimum, this must be equal to 1 max
+ *    packet size of control endpoint 0.If thresholding is enabled, this can be
+ *    programmed to less than one max packet size.
+ *
+ * 5. Reset the Device Address field in Device Configuration Register (DCFG).
+ * 6. (This step is not required if you are using Scatter/Gather DMA mode.) Program
+ *    the following fields in the endpoint-specific registers for control OUT endpoint
+ *    0 to receive a SETUP packet
+ *  - DOEPTSIZ0.SetUP Count = 3 (to receive up to 3 back-to-back SETUP packets)
+ *  - In DMA mode, DOEPDMA0 register with a memory address to store any SETUP packets
+ *    received
+ *
+ *    At this point, all initialization required to receive SETUP packets is done,
+ *    except for enabling control OUT endpoint 0 in DMA mode.
  */
 static mbed_error_t reset_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-
-    /*
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    for (uint8_t i = 0; i < USBOTGHS_MAX_OUT_EP; ++i) {
+        /* if Out EPi is configured, set DOEPCTLi.SNAK to 1 */
+        if (ctx->out_eps[i].configured) {
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(i),
+                         USBOTG_HS_DOEPCTL_CNAK_Msk);
+        }
+    }
+    /* unmask control pipe requested interrupt bits:
      * activate OEPInt, IEPInt & RxFIFO non-empty.
      * Ready to receive requests on EP0.
      */
@@ -111,10 +163,90 @@ static mbed_error_t reset_handler(void)
                  USBOTG_HS_GINTMSK_OEPINT_Msk   |
                  USBOTG_HS_GINTMSK_IEPINT_Msk   |
 				 USBOTG_HS_GINTMSK_RXFLVLM_Msk);
+    /* unmask control 0 IN & OUT endpoint interrupts */
+	set_reg_bits(r_CORTEX_M_USBOTG_HS_DAINTMSK,
+                 USBOTG_HS_DAINTMSK_IEPM(0)   |
+                 USBOTG_HS_DAINTMSK_OEPM(0));
+    /* unmask global setup mask, xfr completion, timeout, for in and out */
+	set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPMSK,
+                 USBOTG_HS_DOEPMSK_STUPM_Msk   |
+                 USBOTG_HS_DOEPMSK_XFRCM_Msk);
+	set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPMSK,
+                 USBOTG_HS_DIEPMSK_XFRCM_Msk |
+                 USBOTG_HS_DIEPMSK_TOM_Msk);
 
+    /*
+     * Settings FIFOs for Endpoint 0
+     */
+	set_reg(r_CORTEX_M_USBOTG_HS_GRXFSIZ, 512, USBOTG_HS_GRXFSIZ_RXFD);
+
+	/*      – Program the OTG_HS_TX0FSIZ register (depending on the FIFO number chosen)
+	 *        to be able to transmit control IN data. At a minimum, this must be equal to 1 max
+	 *        packet size of control endpoint 0.
+	 *
+	 *      XXX: The register 'Enpoint 0 Transmit FIFO size' is called OTG_HS_TX0FSIZ in
+	 *            section 34.17.5 of the reference manual but it is called OTG_HS_DIEPTXF0 in the section 34.16.2.
+	 */
+
+ 	/*
+	 * EndPoint 0 TX FIFO configuration (should store a least 4 64byte paquets
+	 */
+	set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, 512, USBOTG_HS_DIEPTXF_INEPTXSA);
+	set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, 512, USBOTG_HS_DIEPTXF_INEPTXFD);
+
+	/*
+	 * 4. Program STUPCNT in the endpoint-specific registers for control OUT endpoint 0 to receive a SETUP packet
+	 *      – STUPCNT = 3 in OTG_HS_DOEPTSIZ0 (to receive up to 3 back-to-back SETUP packets)
+	 */
+	set_reg(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(0),
+            3, USBOTG_HS_DOEPTSIZ_STUPCNT);
+	set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
+            1, USBOTG_HS_DOEPCTL_CNAK);
+	set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
+            1, USBOTG_HS_DOEPCTL_EPENA);
+
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+    /* set EP0 FIFO using local buffer */
+	write_reg_value(r_CORTEX_M_USBOTG_HS_DOEPDMA(0),
+                    &ep0_fifo)
+#endif
 
     return errcode;
 }
+
+/*
+ * Enumeration done interrupt handler
+ */
+static mbed_error_t enumdone_handler(void)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+
+	/* 1. read the OTG_HS_DSTS register to determine the enumeration speed. */
+	uint8_t speed = get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_ENUMSPD);
+	if (speed != USBOTG_HS_DSTS_ENUMSPD_HS) {
+		log_printf("[USB HS][ENUMDONE]  Wrong enum speed !\n");
+        errcode = MBED_ERROR_INITFAIL;
+		goto err;
+	}
+
+    /* TODO Program the MPSIZ field in OTG_HS_DIEPCTL0 to set the maximum packet size. This
+     * step configures control endpoint 0.
+     */
+	set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(0),
+		      USBOTG_HS_DIEPCTL0_MPSIZ_64BYTES,
+		      USBOTG_HS_DIEPCTL_MPSIZ_Msk(0),
+		      USBOTG_HS_DIEPCTL_MPSIZ_Pos(0));
+
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+	set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(0), USBOTG_HS_DOEPCTLx_EPENA_Msk);
+#endif
+	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
+        		 USBOTG_HS_GINTMSK_SOFM_Msk);
+
+err:
+    return errcode;
+}
+
 
 /*
  * OUT endpoint event (reception in device mode, transmission in Host mode)
@@ -162,13 +294,6 @@ static mbed_error_t otg_handler(void)
 }
 
 static mbed_error_t mmism_handler(void)
-{
-    mbed_error_t errcode = MBED_ERROR_NONE;
-
-    return errcode;
-}
-
-static mbed_error_t enumdone_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
