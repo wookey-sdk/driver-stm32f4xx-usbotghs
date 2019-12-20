@@ -24,11 +24,22 @@
 
 #ifndef USBOTGHS_FIFOS_H_
 #define USBOTGHS_FIFOS_H_
+
 #include "libc/types.h"
+
 #include "api/libusbotghs.h"
+#include "usbotghs.h"
 
 mbed_error_t usbotghs_init_global_fifo(void);
 
 mbed_error_t usbotghs_set_epx_fifo(usbotghs_ep_t *ep);
+
+/* FIFO RAM buffers are EP contexts informations, and don't need to be passed as
+ * parameters */
+mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep);
+
+/* FIFO RAM buffers are EP contexts informations, and don't need to be passed as
+ * parameters */
+mbed_error_t usbotghs_write_epx_fifo(uint32_t size, usbotghs_ep_t *ep);
 
 #endif/*!USBOTGHS_FIFOS_H_*/

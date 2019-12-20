@@ -363,10 +363,12 @@ static mbed_error_t rxflvl_handler(void)
                         goto err;
                     }
                     // TODO:
-#if 0
-                    //usb_hs_driver_rcv_out_pkt(buffer_ep1, &buffer_ep1_idx, buffer_ep1_size, bcnt, epnum);
+#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
+                    usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
 
+# if 0
                     /* FIXME mkproper  In case of EP0, we have to manually check the completion and call the callback */
+                    // Really ? its OEPINT which should handle this !
                     }
                     if (epnum == EP0) {
                         if (buffer_ep0_idx == buffer_ep0_size) {
@@ -375,6 +377,12 @@ static mbed_error_t rxflvl_handler(void)
                             buffer_ep0_idx = buffer_ep0_size = 0;
                         }
                     }
+# endif
+#else
+                    /* XXX: in case of DMA mode activated, the RAM FIFO recopy should be
+                     * handled by the Core itself, and OEPINT executed automatically... */
+                    /* Although, we may have to check the RAM buffer address and size
+                     * in OEPINT and reset them */
 #endif
                     break;
                 }
@@ -411,6 +419,7 @@ static mbed_error_t rxflvl_handler(void)
                     }
                     /* INFO: here, We don't check the setup pkt size, this is under the responsability of the
                      * control plane, as the setup pkt size is USB-standard defined, not driver specific */
+                    usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
                     // TODO: read_fifo(setup_packet, bcnt, epnum);
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */

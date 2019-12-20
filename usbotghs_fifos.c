@@ -92,3 +92,20 @@ mbed_error_t usbotghs_set_epx_fifo(usbotghs_ep_t *ep)
     return MBED_ERROR_NONE;
 }
 
+
+mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
+{
+    /* fifo addr & size are in ep->fifo, ep->fifo_size, ep->fifo_idx */
+    size = size;
+    ep = ep;
+    return MBED_ERROR_NONE;
+}
+
+mbed_error_t usbotghs_write_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
+{
+    /* fifo addr & size are in ep->fifo, ep->fifo_size, ep->fifo_idx */
+    size = size;
+    ep = ep;
+
+    return MBED_ERROR_NONE;
+}
