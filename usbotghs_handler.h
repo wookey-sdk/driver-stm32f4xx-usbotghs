@@ -26,6 +26,49 @@
 
 #include "libc/types.h"
 
+
+/*
+ * OTG_HS_GRXSTSR/OTG_HS_GRXSTSP fields typeseting, needed by oepint/iepint handlers
+ */
+/*
+ * Host IN packet possible status. Other values are reserved
+ */
+typedef enum {
+    PKT_STATUS_IN_DATA_PKT_RECV     = 0x02,
+    PKT_STATUS_IN_TRANSFER_COMPLETE = 0x03,
+    PKT_STATUS_DATA_TOGGLE_ERROR    = 0x05,
+    PKT_STATUS_CHANNEL_HALTED       = 0x07,
+} host_pkt_status_t;
+
+
+/*
+ * Device OUT packet possible status. Other values are reserved
+ */
+typedef enum {
+    PKT_STATUS_GLOBAL_OUT_NAK        = 0x01,
+    PKT_STATUS_OUT_DATA_PKT_RECV     = 0x02,
+    PKT_STATUS_OUT_TRANSFER_COMPLETE = 0x03,
+    PKT_STATUS_SETUP_TRANS_COMPLETE  = 0x04,
+    PKT_STATUS_SETUP_PKT_RECEIVED    = 0x06,
+} device_pkt_status_t;
+
+
+/*
+ * The packet status field content doesn't have the same meaning depending on the current
+ * mode (Device or host)
+ */
+typedef union {
+    host_pkt_status_t   hoststs;
+    device_pkt_status_t devsts;
+} pkt_status_t;
+
+typedef enum {
+    DATA_PID_DATA0  = 0x0,
+    DATA_PID_DATA1  = 0x1,
+    DATA_PID_DATA2  = 0x2,
+    DATA_PID_MDATA  = 0x3,
+} data_pid_t;
+
 void USBOTGHS_IRQHandler(uint8_t interrupt,
                          uint32_t sr,
                          uint32_t dr);

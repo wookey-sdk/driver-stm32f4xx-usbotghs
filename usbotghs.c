@@ -299,6 +299,25 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     }
     ctx.mode = mode;
 
+    /* initialize EP0, which is both IN & OUT EP */
+    ctx.in_eps[0].id = 0;
+    ctx.in_eps[0].configured = false; /* wait for reset */
+    ctx.in_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
+    ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
+    ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    ctx.in_eps[0].fifo = 0; /* not yet configured */
+    ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
+    ctx.in_eps[0].fifo_size = 0; /* not yet configured */
+
+    ctx.out_eps[0].id = 0;
+    ctx.out_eps[0].configured = false; /* wait for reset */
+    ctx.out_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
+    ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
+    ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    ctx.out_eps[0].fifo = 0; /* not yet configured */
+    ctx.out_eps[0].fifo_idx = 0; /* not yet configured */
+    ctx.out_eps[0].fifo_size = 0; /* not yet configured */
+
 err:
     return errcode;
 }

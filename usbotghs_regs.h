@@ -316,6 +316,14 @@
 # define USBOTG_HS_GRXSTSR_FRMNUM_Pos        21
 # define USBOTG_HS_GRXSTSR_FRMNUM_Msk        ((uint32_t)0x7f << USBOTG_HS_GRXSTSR_FRMNUM_Pos)
 
+#define USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp) ((grxstsp & 0x1e0000) >> 17)
+#define USBOTG_HS_GRXSTSP_GET_DPID(grxstsp) ((grxstsp & 0x18000) >> 15)
+#define USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp) ((grxstsp & 0x7ff0) >> 4)
+#define USBOTG_HS_GRXSTSP_GET_EPNUM(grxstsp) (grxstsp & 0xf)
+#define USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp) (grxstsp & 0xf)
+
+
+
 /* Receive FIFO size register */
 # define USBOTG_HS_GRXFSIZ_RXFD_Pos          0
 # define USBOTG_HS_GRXFSIZ_RXFD_Msk          ((uint32_t)0xffff << USBOTG_HS_GRXFSIZ_RXFD_Pos)

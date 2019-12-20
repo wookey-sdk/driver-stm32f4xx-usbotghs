@@ -61,12 +61,12 @@
 /* setup packet, to be passed to upper libctrl */
 
 typedef enum {
-    USB_EP_STATE_IDLE  = 0,
-    USB_EP_STATE_SETUP = 1,
-    USB_EP_STATE_STATUS = 2,
-    USB_EP_STATE_STALL = 3,
-    USB_EP_STATE_DATA_IN = 4,
-    USB_EP_STATE_DATA_OUT = 5,
+    USBOTG_HS_EP_STATE_IDLE  = 0,
+    USBOTG_HS_EP_STATE_SETUP = 1,
+    USBOTG_HS_EP_STATE_STATUS = 2,
+    USBOTG_HS_EP_STATE_STALL = 3,
+    USBOTG_HS_EP_STATE_DATA_IN = 4,
+    USBOTG_HS_EP_STATE_DATA_OUT = 5,
 } usbotghs_ep_state_t;
 
 /*
@@ -89,10 +89,11 @@ typedef struct {
 
 /* current context of the USB OTG HS Core */
 typedef struct {
-    uint8_t             id;              /* device unique identifier, from generated header */
     device_t            dev;             /* associated device_t structure */
     int                 dev_desc;        /* device descriptor */
     usbotghs_dev_mode_t mode;            /* current OTG mode (host or device) */
+    bool                gonak_req;       /* global OUT NAK requested */
+    bool                gonak_active;    /* global OUT NAK effective */
     usbotghs_ep_t       in_eps[USBOTGHS_MAX_IN_EP];       /* list of HW supported IN EPs */
     usbotghs_ep_t       out_eps[USBOTGHS_MAX_OUT_EP];      /* list of HW supported OUT EPs */
 } usbotghs_context_t;

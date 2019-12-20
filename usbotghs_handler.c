@@ -30,6 +30,8 @@
 #include "usbotghs_regs.h"
 #include "usbotghs.h"
 
+#include "generated/usb_otg_hs.h"
+#include "usbotghs_fifos.h"
 #include "usbotghs_handler.h"
 
 /************************************************
@@ -190,42 +192,27 @@ static mbed_error_t reset_handler(void)
                  USBOTG_HS_DIEPMSK_XFRCM_Msk |
                  USBOTG_HS_DIEPMSK_TOM_Msk);
 
-    /*
-     * Settings FIFOs for Endpoint 0
-     */
-	set_reg(r_CORTEX_M_USBOTG_HS_GRXFSIZ, 512, USBOTG_HS_GRXFSIZ_RXFD);
+    if ((errcode = usbotghs_init_global_fifo()) != MBED_ERROR_NONE) {
+        goto err;
+    }
 
-	/*      – Program the OTG_HS_TX0FSIZ register (depending on the FIFO number chosen)
-	 *        to be able to transmit control IN data. At a minimum, this must be equal to 1 max
-	 *        packet size of control endpoint 0.
-	 *
-	 *      XXX: The register 'Enpoint 0 Transmit FIFO size' is called OTG_HS_TX0FSIZ in
-	 *            section 34.17.5 of the reference manual but it is called OTG_HS_DIEPTXF0 in the section 34.16.2.
-	 */
-
- 	/*
-	 * EndPoint 0 TX FIFO configuration (should store a least 4 64byte paquets
-	 */
-	set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, 512, USBOTG_HS_DIEPTXF_INEPTXSA);
-	set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, 512, USBOTG_HS_DIEPTXF_INEPTXFD);
-
-	/*
-	 * 4. Program STUPCNT in the endpoint-specific registers for control OUT endpoint 0 to receive a SETUP packet
-	 *      – STUPCNT = 3 in OTG_HS_DOEPTSIZ0 (to receive up to 3 back-to-back SETUP packets)
-	 */
-	set_reg(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(0),
-            3, USBOTG_HS_DOEPTSIZ_STUPCNT);
-	set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
-            1, USBOTG_HS_DOEPCTL_CNAK);
-	set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
-            1, USBOTG_HS_DOEPCTL_EPENA);
-
+    if ((errcode = usbotghs_set_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
+        goto err;
+    }
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* set EP0 FIFO using local buffer */
 	write_reg_value(r_CORTEX_M_USBOTG_HS_DOEPDMA(0),
-                    &ep0_fifo)
+                    &ep0_fifo);
 #endif
 
+    /* Now EP0 is configued. Set this information in the driver context */
+    ctx->in_eps[0].configured = true;
+    ctx->out_eps[0].configured = true;
+
+    /* Enable Endpoint */
+    set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
+            1, USBOTG_HS_DOEPCTL_EPENA);
+err:
     return errcode;
 }
 
@@ -258,6 +245,8 @@ static mbed_error_t enumdone_handler(void)
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
         		 USBOTG_HS_GINTMSK_SOFM_Msk);
 
+    /* triggers control plane reset handler */
+    errcode = usbctrl_handle_reset(usb_otg_hs_dev_infos.id);
 err:
     return errcode;
 }
@@ -265,6 +254,11 @@ err:
 
 /*
  * OUT endpoint event (reception in device mode, transmission in Host mode)
+ *
+ * In device mode:
+ * OEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
+ * In Host mode:
+ * OEPINNT is executed when the TxFIFO has been flushed by the core and content sent
  */
 static mbed_error_t oepint_handler(void)
 {
@@ -275,6 +269,11 @@ static mbed_error_t oepint_handler(void)
 
 /*
  * IN endpoint event (transmission in device mode, reception in Host mode)
+ *
+ * In device mode:
+ * IEPINNT is executed when the TxFIFO has been flushed by the core and content sent
+ * In Host mode:
+ * IEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
  */
 static mbed_error_t iepint_handler(void)
 {
@@ -283,10 +282,153 @@ static mbed_error_t iepint_handler(void)
     return errcode;
 }
 
+/*
+ * RXFLV handler, This interrupt is executed when the core as written a complete packet in the RxFIFO.
+ */
 static mbed_error_t rxflvl_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+	uint32_t grxstsp;
+	pkt_status_t pktsts;
+	data_pid_t dpid;
+	uint16_t bcnt;
+	uint8_t epnum; /* device case */
+	uint8_t chnum; /* host case */
+	uint32_t size;
+    usbotghs_context_t *ctx;
 
+    ctx = usbotghs_get_context();
+
+   	/* 2. Mask the RXFLVL interrupt (in OTG_HS_GINTSTS) by writing to RXFLVL = 0
+     * (in OTG_HS_GINTMSK),  until it has read the packet from the receive FIFO
+     */
+	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, USBOTG_HS_GINTMSK_RXFLVLM);
+
+ 	/* 1. Read the Receive status pop register */
+    grxstsp = read_reg_value(r_CORTEX_M_USBOTG_HS_GRXSTSP);
+
+    /* what is our mode (Host or Dev) ? Set corresponding variables */
+    switch (ctx->mode) {
+        case USBOTGHS_MODE_HOST:
+            pktsts.hoststs = USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp);
+            chnum = USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp);
+            break;
+        case USBOTGHS_MODE_DEVICE:
+            pktsts.devsts = USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp);
+            epnum = USBOTG_HS_GRXSTSP_GET_EPNUM(grxstsp);
+            break;
+        default:
+            errcode = MBED_ERROR_INVSTATE;
+            goto err;
+    }
+	dpid = USBOTG_HS_GRXSTSP_GET_DPID(grxstsp);
+	bcnt =  USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp);
+	size = 0;
+#if CONFIG_USR_DRV_USBOTGHS_DEBUG
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        log_printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
+    } else if (ctx->mode == USBOTGHS_MODE_HOST) {
+        log_printf("CH:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", chnum, pktsts.hoststs, bcnt, dpid);
+    }
+#endif
+    /* 3. If the received packet’s byte count is not 0, the byte count amount of data
+     * is popped from the receive Data FIFO and stored in memory. If the received packet
+     * byte count is 0, no data is popped from the receive data FIFO.
+     *
+     *   /!\ Reading an empty receive FIFO can result in undefined core behavior.
+     */
+    switch (ctx->mode) {
+        case USBOTGHS_MODE_DEVICE:
+        {
+            /* 4. The receive FIFO’s packet status readout indicates one of the following: */
+            switch (pktsts.devsts) {
+                case PKT_STATUS_GLOBAL_OUT_NAK:
+                {
+                    if (epnum != EP0) {
+                        errcode = MBED_ERROR_UNSUPORTED_CMD;
+                        goto err;
+                    }
+                    log_printf("[USB HS][RXFLVL] EP0 Global OUT NAK effective\n");
+                    ctx->gonak_active = true;
+                    break;
+                }
+                case PKT_STATUS_OUT_DATA_PKT_RECV:
+                {
+                    log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT Recv\n");
+                    if (ctx->out_eps[epnum].configured != true ||
+                        ctx->out_eps[epnum].state != USBOTG_HS_EP_STATE_DATA_OUT)
+                    {
+                        log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP %d!\n", epnum);
+                        errcode = MBED_ERROR_INVSTATE;
+                        goto err;
+                    }
+                    // TODO:
+#if 0
+                    //usb_hs_driver_rcv_out_pkt(buffer_ep1, &buffer_ep1_idx, buffer_ep1_size, bcnt, epnum);
+
+                    /* FIXME mkproper  In case of EP0, we have to manually check the completion and call the callback */
+                    }
+                    if (epnum == EP0) {
+                        if (buffer_ep0_idx == buffer_ep0_size) {
+                            buffer_ep0 = NULL;
+                            usb_hs_callbacks.data_received_callback(buffer_ep0_idx);
+                            buffer_ep0_idx = buffer_ep0_size = 0;
+                        }
+                    }
+#endif
+                    break;
+                }
+                case PKT_STATUS_OUT_TRANSFER_COMPLETE:
+                {
+                    log_printf("[USB HS][RXFLVL] EP0 OUT Transfer complete on EP %d\n", epnum);
+                    if (ctx->out_eps[epnum].configured != true) /* which state on OUT TRSFER Complete ? */
+                    {
+                        log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP!\n");
+                        errcode = MBED_ERROR_INVSTATE;
+                        goto err;
+                    }
+                    break;
+                }
+                case PKT_STATUS_SETUP_TRANS_COMPLETE:
+                {
+                    log_printf("[USB HS][RXFLVL] EP0 Setup Transfer complete\n");
+                    if (epnum != EP0 || bcnt != 0) {
+                        errcode = MBED_ERROR_UNSUPORTED_CMD;
+                        goto err;
+                    }
+                    break;
+                }
+                case PKT_STATUS_SETUP_PKT_RECEIVED:
+                {
+                    log_printf("[USB HS][RXFLVL] EP0 Setup pkt receive\n");
+                    if (epnum != EP0 || dpid != DATA_PID_DATA0) {
+                        errcode = MBED_ERROR_UNSUPORTED_CMD;
+                        goto err;
+                    }
+                    if (bcnt == 0) {
+                        /* This is a Zero-length-packet reception, nothing to do */
+                        goto err;
+                    }
+                    /* INFO: here, We don't check the setup pkt size, this is under the responsability of the
+                     * control plane, as the setup pkt size is USB-standard defined, not driver specific */
+                    // TODO: read_fifo(setup_packet, bcnt, epnum);
+                    /* After this, the Data stage begins. A Setup stage done should be received, which triggers
+                     * a Setup interrupt */
+                    break;
+                }
+                default:
+                    log_printf("RXFLVL bad status %x!", pktst.devsts);
+
+            }
+        }
+        case USBOTGHS_MODE_HOST:
+        {
+            /* TODO: handle Host mode RXFLVL behavior */
+        }
+        break;
+    }
+err:
+	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
     return errcode;
 }
 
