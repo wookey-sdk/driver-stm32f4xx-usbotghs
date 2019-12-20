@@ -108,26 +108,35 @@ typedef enum {
 /*********************************************************************************
  * About handlers
  *
- * Handlers are triggered by the USB OTG HS driver on events (typically interrupts)
- * in order to call the corresponding subprogram.
+ * The Control plane must declare some handlers for various events (see usbotghs_handlers.c
+ * for more informations). These handlers are called on these events in order to execute
+ * control level (or potentially upper level(s)) programs. They can use the USB OTG HS
+ * driver API during their execution.
  *
- * Events can be:
- * - data reception
- * - requests reception (i.e. setup packets)
- * - various state events (reset, power-related, errors)
+ * Control level handlers are linked directly through their prototype definition here.
  *
- * handlers for OUT event (reception from the device side)
- * These handlers must be declared from the upper layers (libusbctrl or interfaces)
+ * We prefer to use prototype and link time symbol resolution instead of callbacks as:
+ *   1. The USB control plane is not an hotpluggable element
+ *   2. callbacks have security impacts, as they can be corrupted, generating arbitrary
+ *      code execution
  *
- * INFO: Remember that USB protocol direction is defined from the host point of view.
- * Receptions are made on OUT endpoints, transmission on IN endpoints.
+ *  WARNING: as we use prototypes (and not callbacks), these functions *must* exists at
+ *  link time, for symbol resolution.
+ *  It has been decided that the driver doesn't hold weak symbols for these functions,
+ *  as their absence would make the USB stack unfonctional.
+ *  If one of these function is not set in the control plane (or in any element of the
+ *  application to be linked) it would generate a link time error, corresponding to a
+ *  missing symbol.
+ *
  */
-typedef mbed_error_t (*setup_pkt_handler_t)(uint8_t *setup_pkt,
-                                            uint32_t dev_id);
 
-typedef mbed_error_t (*data_pkt_handler_t)(uint8_t *data_pkt,
-                                           uint8_t ep_num,
-                                   uint8_t dev_id);
+mbed_error_t usbctrl_handle_earlysuspend(uint32_t dev_id);
+mbed_error_t usbctrl_handle_reset(uint32_t dev_id);
+mbed_error_t usbctrl_handle_usbsuspend(uint32_t dev_id);
+mbed_error_t usbctrl_handle_inepevent(uint32_t dev_id);
+mbed_error_t usbctrl_handle_outepevent(uint32_t dev_id);
+mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id);
+
 
 /********************************************************************************
  * About functional API

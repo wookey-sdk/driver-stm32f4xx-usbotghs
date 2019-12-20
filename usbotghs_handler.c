@@ -49,20 +49,35 @@ uint8_t ep0_fifo[512] = {0};
  * When an interrupt is handled, all the bits must be checked against the following
  * bitfield definition, as multiple event may occur in the same time, and as a consequence be
  * handled in the same ISR.
+ *
+ * In all these interrupts, the following must be pushed to the upper layer:
+ * - ESUSP (Early suspend, i.e. BUS_INACTIVE transition)
+ * - USBRST (USB reset transition)
+ * - USBSUSP (USB Suspend, i.e. BUS_INACTIVE transition, starting the USB DEFAULT state)
+ * - IEPINT (IN Endpoint event interrupt)
+ * - OEPINT (OUT Endpoint event interrupt)
+ * - RXFLVL (RxFIFO non-empty interrupt)
+ * - WKUPINT (Wakeup event interrupt)
+ *
+ * The USB OTG HS driver is neither responsible for dispatching received data between
+ * interfaces, nor responsible for parsing setup packets or dispatching differencially
+ * data or setup packets for various endpoint.
+ * O(I)EPINT handlers get back the packet, its size, its EP num and type, and push
+ * it back to the control plane for parsing/dispatching.
  */
 typedef enum {
     USBOTGHS_IT_CMOD       = 0,    /*< Current Mode of Operation  */
     USBOTGHS_IT_MMIS       = 1,    /*< Mode mismatch */
     USBOTGHS_IT_OTGINT     = 2,    /*< OTG interrupt */
     USBOTGHS_IT_SOF        = 3,    /*< Start of Frame */
-    USBOTGHS_IT_XFLVL      = 4,    /*< RxFifo non-empty */
+    USBOTGHS_IT_RXFLVL     = 4,    /*< RxFifo non-empty */
     USBOTGHS_IT_NPTXE      = 5,    /*< Non-periodic TxFIFO empty (Host mode) */
     USBOTGHS_IT_GINAKEFF   = 6,    /*< Global IN NAK effective */
     USBOTGHS_IT_GONAKEFF   = 7,    /*< Global OUT NAK effective*/
     USBOTGHS_IT_RESERVED8  = 8,    /*< Reserved */
     USBOTGHS_IT_RESERVED9  = 9,    /*< Reserved */
     USBOTGHS_IT_ESUSP      = 10,   /*< Early suspend */
-    USBOTGHS_IT_USBSUSB    = 11,   /*< USB Suspend */
+    USBOTGHS_IT_USBSUSP    = 11,   /*< USB Suspend */
     USBOTGHS_IT_USBRST     = 12,   /*< Reset */
     USBOTGHS_IT_ENUMDNE    = 13,   /*< Speed enumeration done */
     USBOTGHS_IT_ISOODRP    = 14,   /*< Isochronous OUT pkt dropped */
