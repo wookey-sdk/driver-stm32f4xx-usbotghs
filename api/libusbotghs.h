@@ -133,8 +133,8 @@ typedef enum {
 mbed_error_t usbctrl_handle_earlysuspend(uint32_t dev_id);
 mbed_error_t usbctrl_handle_reset(uint32_t dev_id);
 mbed_error_t usbctrl_handle_usbsuspend(uint32_t dev_id);
-mbed_error_t usbctrl_handle_inepevent(uint32_t dev_id);
-mbed_error_t usbctrl_handle_outepevent(uint32_t dev_id);
+mbed_error_t usbctrl_handle_inepevent(uint32_t dev_id, uint32_t size, uint8_t ep);
+mbed_error_t usbctrl_handle_outepevent(uint32_t dev_id, uint32_t size, uint8_t ep);
 mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id);
 
 
@@ -164,13 +164,40 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode);
 /*
  * Sending data (whatever data type is (i.e. status on control pipe or data on
  * data (Bulk, IT or isochronous) pipe)
+ * This is not a syncrhonous request, i.e. data are stored into the USB OTG HS
+ * interanal FIFO, waiting for bus transmission. When data are fully transmitted,
+ * a iepint (device mode) or oepint (host mode) is triggered to inform the upper
+ * layer that the content has been sent. Although, it is possible to push some
+ * other data in the internal FIFO if needed, while this FIFO is not full
+ * (check for this function return value)
+ *
+ * @src the RAM FIFO from which the data are read
+ * @size the amount of data bytes to send
+ * @ep the endpoint on which the data are to be sent
+ *
+ * @return MBED_ERROR_NONE if data has been correctly transmitted into the internal
+ * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
 mbed_error_t usbotghs_send_data(const uint8_t *src, uint32_t size, uint8_t ep);
 
 /*
- * Receiving data (same as above, but for receiving
+ * Configure for receiving data. Receiving data is a triggering event, not a direct call.
+ * As a consequence, the upper layers have to specify the amount of data requested for
+ * the next USB transaction on the given OUT (device mode) or IN (host mode) enpoint.
+ *
+ * @dst is the destination buffer that will be used to hold  @size amount of data bytes
+ * @size is the amount of data bytes to load before await the upper stack
+ * @ep is the active endpoint on which this action is done
+ *
+ * On data reception:
+ * - if there is enough data loaded in the output buffer, the upper stack is awoken
+ * - If not, data is silently stored in FIFO RAM (targetted by dst), and the driver waits
+ *   for the next content while 'size' amount of data is not reached
+ *
+ * @return MBED_ERROR_NONE if setup is ok, or various possible other errors (INVSTATE
+ * for invalid enpoint type, INVPARAM if dst is NULL or size invalid)
  */
-mbed_error_t usbotghs_recv_data(uint8_t *dst, uint32_t size, uint8_t ep);
+mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t ep);
 
 /*
  * Send a special zero-length packet on EP ep
@@ -233,7 +260,7 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
  * usb_driver_set_address - Set the address of the device
  * @addr: Device's address
  */
-void usbotghs_driver_set_address(uint16_t addr);
+void usbotghs_set_address(uint16_t addr);
 
 /* Map USB device. TODO */
 void usbotghs_bind(void);

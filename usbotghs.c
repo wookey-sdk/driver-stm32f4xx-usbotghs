@@ -305,9 +305,12 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     ctx.in_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
     ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
-    ctx.in_eps[0].fifo = 0; /* not yet configured */
+    ctx.in_eps[0].fifo = NULL; /* not yet configured */
     ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
     ctx.in_eps[0].fifo_size = 0; /* not yet configured */
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+    ctx.in_eps[0].fifo_dma_lock = false;
+#endif
 
     ctx.out_eps[0].id = 0;
     ctx.out_eps[0].configured = false; /* wait for reset */
@@ -317,6 +320,9 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     ctx.out_eps[0].fifo = 0; /* not yet configured */
     ctx.out_eps[0].fifo_idx = 0; /* not yet configured */
     ctx.out_eps[0].fifo_size = 0; /* not yet configured */
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+    ctx.in_eps[0].fifo_dma_lock = false;
+#endif
 
 err:
     return errcode;
@@ -332,19 +338,6 @@ mbed_error_t usbotghs_send_data(const uint8_t *src, uint32_t size, uint8_t ep)
     mbed_error_t errcode = MBED_ERROR_NONE;
 
     src = src;
-    size = size;
-    ep = ep;
-    return errcode;
-}
-
-/*
- * Read from a given input EP.
- */
-mbed_error_t usbotghs_recv_data(uint8_t *dst, uint32_t size, uint8_t ep)
-{
-    mbed_error_t errcode = MBED_ERROR_NONE;
-
-    dst = dst;
     size = size;
     ep = ep;
     return errcode;

@@ -109,3 +109,62 @@ mbed_error_t usbotghs_write_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
 
     return MBED_ERROR_NONE;
 }
+
+/*
+ * Configure for receiving data. Receiving data is a triggering event, not a direct call.
+ * As a consequence, the upper layers have to specify the amount of data requested for
+ * the next USB transaction on the given OUT (device mode) or IN (host mode) enpoint.
+ *
+ * @dst is the destination buffer that will be used to hold  @size amount of data bytes
+ * @size is the amount of data bytes to load before await the upper stack
+ * @ep is the active endpoint on which this action is done
+ *
+ * On data reception:
+ * - if there is enough data loaded in the output buffer, the upper stack is awoken
+ * - If not, data is silently stored in FIFO RAM (targetted by dst), and the driver waits
+ *   for the next content while 'size' amount of data is not reached
+ *
+ * @return MBED_ERROR_NONE if setup is ok, or various possible other errors (INVSTATE
+ * for invalid enpoint type, INVPARAM if dst is NULL or size invalid)
+ */
+mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
+{
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    usbotghs_ep_t*      ep;
+    mbed_error_t        errcode = MBED_ERROR_NONE;
+
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        /* reception is done ON out_eps in device mode */
+        ep = &(ctx->out_eps[epid]);
+    } else {
+        /* reception is done IN out_eps in device mode */
+        ep = &(ctx->in_eps[epid]);
+    }
+    if (!ep->configured) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+    if (ep->recv_fifo_dma_lck) {
+        /* a DMA transaction is currently being executed toward the recv FIFO.
+         * Wait for it to finish before resetting it */
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+#endif
+    /* set RAM FIFO for current EP. */
+    ep->fifo = dst;
+    ep->fifo_idx = 0;
+    ep->fifo_size = size;
+
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+    /* configuring DMA for this FIFO */
+    /* set EP0 FIFO using local buffer */
+	write_reg_value(r_CORTEX_M_USBOTG_HS_DOEPDMA(epid),
+                    dst);
+#endif
+
+    /* FIFO is now configured */
+err:
+    return errcode;
+}

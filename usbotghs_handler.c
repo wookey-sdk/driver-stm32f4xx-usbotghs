@@ -199,17 +199,16 @@ static mbed_error_t reset_handler(void)
     if ((errcode = usbotghs_set_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
         goto err;
     }
-#if CONFIG_USR_DEV_USBOTGHS_DMA
-    /* set EP0 FIFO using local buffer */
-	write_reg_value(r_CORTEX_M_USBOTG_HS_DOEPDMA(0),
-                    &ep0_fifo);
-#endif
 
     /* Now EP0 is configued. Set this information in the driver context */
     ctx->in_eps[0].configured = true;
     ctx->out_eps[0].configured = true;
 
-    /* Enable Endpoint */
+    /* execute upper layer (USB Control plane) reset handler */
+    usbctrl_handle_reset(usb_otg_hs_dev_infos.id);
+
+    /* now that USB full stack execution is done, Enable Endpoint.
+     * From now on, data can be received or sent on Endpoint 0 */
     set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
             1, USBOTG_HS_DOEPCTL_EPENA);
 err:
@@ -245,8 +244,11 @@ static mbed_error_t enumdone_handler(void)
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
         		 USBOTG_HS_GINTMSK_SOFM_Msk);
 
-    /* triggers control plane reset handler */
-    errcode = usbctrl_handle_reset(usb_otg_hs_dev_infos.id);
+    /* XXX: by now, no upper trigger on 'ENUMERATION DONE' event.
+     * This event is received after the USB reset event when full USB
+     * enumeration is done and speed selected. It does not change the
+     * USB control stack state automaton. Only USB reset do this.
+     */
 err:
     return errcode;
 }
@@ -292,8 +294,8 @@ static mbed_error_t rxflvl_handler(void)
 	pkt_status_t pktsts;
 	data_pid_t dpid;
 	uint16_t bcnt;
-	uint8_t epnum; /* device case */
-	uint8_t chnum; /* host case */
+	uint8_t epnum = 0; /* device case */
+	uint8_t chnum = 0; /* host case */
 	uint32_t size;
     usbotghs_context_t *ctx;
 
@@ -426,7 +428,7 @@ static mbed_error_t rxflvl_handler(void)
                     break;
                 }
                 default:
-                    log_printf("RXFLVL bad status %x!", pktst.devsts);
+                    log_printf("RXFLVL bad status %x!", pktsts.devsts);
 
             }
         }
