@@ -269,8 +269,42 @@ err:
 static mbed_error_t oepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-
-    /* calling upper handler */
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    uint16_t daint = 0;
+    /* get EPx on which the event came */
+    daint = (uint16_t)((read_reg_value(r_CORTEX_M_USBOTG_HS_DAINT) >> 16) & 0xff);
+    /* checking current mode */
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        /* here, this is a 'data received' interrupt */
+        uint16_t val = 0x1;
+        uint8_t ep_id = 0;
+        for (uint8_t i = 0; i < 16; ++i) {
+            if (daint & val) {
+                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_IN;
+                /* calling upper handler */
+                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+            }
+            ep_id++;
+            val = val << 1;
+        }
+    } else {
+        /* here, this is a 'end of transmission' interrupt. Let's handle each
+         * endpoint for which the interrupt rised */
+        uint16_t val = 0x1;
+        uint8_t ep_id = 0;
+        for (uint8_t i = 0; i < 16; ++i) {
+            if (daint & val) {
+                /* an iepint for this EP is active */
+                log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
+                /* now that transmit is complete, set ep state as IDLE */
+                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                /* calling upper handler, transmitted size read from DOEPSTS */
+                //TODO: errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, size, ep_id);
+            }
+            ep_id++;
+            val = val << 1;
+        }
+    }
     return errcode;
 }
 
@@ -301,15 +335,28 @@ static mbed_error_t iepint_handler(void)
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
                 /* now that transmit is complete, set ep state as IDLE */
                 ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                /* calling upper handler, transmitted size read from DIEPSTS */
+                // TODO: errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, size, ep_id);
             }
             ep_id++;
             val = val << 1;
         }
-
     } else {
         /* here, this is a 'data received' interrupt */
+        uint16_t val = 0x1;
+        uint8_t ep_id = 0;
+        for (uint8_t i = 0; i < 16; ++i) {
+            if (daint & val) {
+                /* an iepint for this EP is active */
+                log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
+                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_IN;
+                /* calling upper handler */
+                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+            }
+            ep_id++;
+            val = val << 1;
+        }
     }
-
     /* calling upper handler */
     return errcode;
 }
