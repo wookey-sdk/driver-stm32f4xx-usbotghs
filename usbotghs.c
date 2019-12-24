@@ -32,6 +32,7 @@
 #include "api/libusbotghs.h"
 #include "usbotghs.h"
 #include "usbotghs_init.h"
+#include "usbotghs_fifos.h"
 #include "usbotghs_handler.h"
 #include "usbotghs_regs.h"
 #include "ulpi.h"
@@ -50,6 +51,18 @@
 #define USBOTG_HS_TX_FIFO_SZ	512
 
 #define USBOTG_HS_DEBUG 0
+
+/******************************************************************
+ * Utilities
+ */
+/* wait while the iepint (or oepint in host mode) clear the DATA_OUT state */
+static void usbotghs_wait_for_xmit_complete(usbotghs_ep_t *ep)
+{
+    do {
+        ;
+    } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
+    return;
+}
 
 /******************************************************************
  * Defining functional API
@@ -308,9 +321,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     ctx.in_eps[0].fifo = NULL; /* not yet configured */
     ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
     ctx.in_eps[0].fifo_size = 0; /* not yet configured */
-#if CONFIG_USR_DEV_USBOTGHS_DMA
-    ctx.in_eps[0].fifo_dma_lock = false;
-#endif
+    ctx.in_eps[0].fifo_lck = false;
 
     ctx.out_eps[0].id = 0;
     ctx.out_eps[0].configured = false; /* wait for reset */
@@ -320,9 +331,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     ctx.out_eps[0].fifo = 0; /* not yet configured */
     ctx.out_eps[0].fifo_idx = 0; /* not yet configured */
     ctx.out_eps[0].fifo_size = 0; /* not yet configured */
-#if CONFIG_USR_DEV_USBOTGHS_DMA
-    ctx.in_eps[0].fifo_dma_lock = false;
-#endif
+    ctx.in_eps[0].fifo_lck = false;
 
 err:
     return errcode;
@@ -333,24 +342,193 @@ err:
  * send the data on the line (by activating the EP (field USBAEP of out EPs))
  * We must wait data sent IT to be sure that content is effectively transmitted
  */
-mbed_error_t usbotghs_send_data(const uint8_t *src, uint32_t size, uint8_t ep)
+mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 {
+    uint32_t packet_count = 0;
     mbed_error_t errcode = MBED_ERROR_NONE;
 
-    src = src;
-    size = size;
-    ep = ep;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    usbotghs_ep_t *ep = NULL;
+
+    if (ctx->mode == USBOTGHS_MODE_HOST) {
+      ep = &ctx->out_eps[ep_id];
+    } else {
+      ep = &ctx->in_eps[ep_id];
+    }
+    if (!ep->configured) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    /*
+     * Here, we have to split the src content, taking into account the
+     * current EP mpsize, and schedule transmission into the Core TxFIFO.
+     */
+    /* first set xmit fifo with given argument */
+    usbotghs_set_xmit_fifo(src, size, ep_id);
+
+    /* we loop while size is bigger than EPx Core TxFIFO size. Core TxFIFO size
+     * is bigger (or equal) to mpsize (ideally bigger), which means that we can
+     * transfer to the core TxFIFO size of the EP multiple mpsize packets
+     * and a potential residual short packet while the FIFO is not full.
+     * Yet, if we needs to consume more than the FIFO size, we need to
+     * repeat this operation multiple time by:
+     * 1. Set the transfert size (depending on the current FIFO free space) and the packet
+     *    count (equal to the number of mpsize packets + short packet that need to be
+     *    transfered
+     * 2. Fullfill the FIFO
+     * 3. Request a transmission of these packets
+     * 4. check the Status flag to be sure that data has been sent (or wait for
+     *    Endpoint diabled IT)
+     * 4. Loop again with the next offset of the input src buffer, while there is still
+     *    some data to send.
+     *
+     *    FIXME: BELOW TO REPLACE
+     */
+    for (; size >= ep->mpsize; size -= ep->mpsize) {
+        /* Program the transfer size and packet count as follows:
+         *      xfersize = N * maxpacket + short_packet pktcnt = N + (short_packet exist ? 1 : 0)
+         */
+        packet_count = 0; //(size / ep->mpsize) + (size & ep->mpsize-1) ? 1 : 0);
+
+        if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+            /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
+             * and the corresponding packet count. */
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                      packet_count,
+                      USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+                      USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                    size,
+                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+            /* 2. Enable endpoint for transmission. */
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+                    USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+        } else {
+            /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
+             * and the corresponding packet count. */
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+                      packet_count,
+                      USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
+                      USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
+
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+                    size,
+                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
+                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
+            /* 2. Enable endpoint for transmission. */
+
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
+                    USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DOEPCTL_EPENA_Msk);
+        }
+        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+        usbotghs_write_epx_fifo(ep->mpsize, ep);
+        /* wait for XMIT data to be transfered (wait for iepint (or oepint in
+         * host mode) to set the EP in correct state */
+        usbotghs_wait_for_xmit_complete(ep);
+
+    }
+    /* residual */
+    if (size) {
+        packet_count = (size / ep->mpsize) + (size & (MAX_DATA_PACKET_SIZE(ep)-1) ? 1 : 0);
+
+
+        if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+            /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
+             * and the corresponding packet count. */
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                      packet_count,
+                      USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+                      USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep));
+
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                    size,
+                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+            /* 2. Enable endpoint for transmission. */
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+                    USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+        } else {
+            /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
+             * and the corresponding packet count. */
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+                      packet_count,
+                      USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
+                      USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
+
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+                    size,
+                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
+                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
+            /* 2. Enable endpoint for transmission. */
+
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
+                    USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DOEPCTL_EPENA_Msk);
+        }
+        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+        usbotghs_write_epx_fifo(size, ep);
+        usbotghs_wait_for_xmit_complete(ep);
+    }
+err:
     return errcode;
 }
 
 /*
  * Send a Zero-length packet into EP 'ep'
  */
-mbed_error_t usbotghs_send_zlp(uint8_t ep)
+mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    usbotghs_ep_t *ep = NULL;
 
-    ep = ep;
+    if (ctx->mode == USBOTGHS_MODE_HOST) {
+      ep = &ctx->out_eps[ep_id];
+    } else {
+      ep = &ctx->in_eps[ep_id];
+    }
+    if (!ep->configured) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    /* EP is now in DATA_OUT state */
+    ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
+         * and the corresponding packet count. */
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                1,
+                USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+                USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                0,
+                USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+                USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+        /* 2. Enable endpoint for transmission. */
+        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+                USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+    } else {
+        /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
+         * and the corresponding packet count. */
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+                1,
+                USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
+                USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
+
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+                0,
+                USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
+                USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
+        /* 2. Enable endpoint for transmission. */
+        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
+                USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DOEPCTL_EPENA_Msk);
+    }
+    /* wait for XMIT data to be transfered (wait for iepint (or oepint in
+     * host mode) to set the EP in correct state */
+    usbotghs_wait_for_xmit_complete(ep);
+err:
     return errcode;
 }
 

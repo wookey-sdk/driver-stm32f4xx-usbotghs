@@ -74,18 +74,16 @@ typedef enum {
  * local context hold by the driver
  */
 typedef struct {
-    uint8_t             id;                 /* EP id (libusbctrl view) */
-    bool                configured;         /* is EP configured in current configuration ? */
-    uint16_t            mpsize;             /* max packet size (bitfield, 11 bits, in bytes) */
-    usbotghs_ep_type_t  type;               /* EP type */
-    usbotghs_ep_state_t state;              /* EP current state */
+    uint8_t                      id;           /* EP id (libusbctrl view) */
+    bool                         configured;   /* is EP configured in current configuration ? */
+    uint16_t                     mpsize;       /* max packet size (bitfield, 11 bits, in bytes) */
+    usbotghs_ep_type_t           type;         /* EP type */
+    volatile usbotghs_ep_state_t state;        /* EP current state */
 
-    uint8_t             *fifo;         /* associated RAM FIFO (recv) */
-    uint32_t             fifo_idx;     /* current FIFO index  (recv) */
-    uint32_t             fifo_size;    /* associated RAM FIFO (recv) */
-#if CONFIG_USR_DEV_USBOTGHS_DMA
-    bool                 fifo_dma_lck; /* DMA, locking mechanism (recv) */
-#endif
+    volatile uint8_t            *fifo;         /* associated RAM FIFO (recv) */
+    volatile uint32_t            fifo_idx;     /* current FIFO index  (recv) */
+    volatile uint32_t            fifo_size;    /* associated RAM FIFO max size (recv) */
+    volatile bool                fifo_lck;     /* DMA, locking mechanism (recv) */
 } usbotghs_ep_t;
 
 #define USBOTGHS_MAX_IN_EP   8

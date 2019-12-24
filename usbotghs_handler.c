@@ -196,7 +196,10 @@ static mbed_error_t reset_handler(void)
         goto err;
     }
 
-    if ((errcode = usbotghs_set_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
+    /* fifo is RESET, in both Core registers and EP context. The FIFO will need
+     * to be reconfigured later by the driver API (typically through upper
+     * reset handler */
+    if ((errcode = usbotghs_reset_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
         goto err;
     }
 
@@ -204,7 +207,8 @@ static mbed_error_t reset_handler(void)
     ctx->in_eps[0].configured = true;
     ctx->out_eps[0].configured = true;
 
-    /* execute upper layer (USB Control plane) reset handler */
+    /* execute upper layer (USB Control plane) reset handler. This
+     * function should always reconfigure the FIFO structure */
     usbctrl_handle_reset(usb_otg_hs_dev_infos.id);
 
     /* now that USB full stack execution is done, Enable Endpoint.
@@ -266,6 +270,7 @@ static mbed_error_t oepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
+    /* calling upper handler */
     return errcode;
 }
 
@@ -280,7 +285,32 @@ static mbed_error_t oepint_handler(void)
 static mbed_error_t iepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    uint16_t daint = 0;
+    /* get EPx on which the event came */
+    daint = (uint16_t)(read_reg_value(r_CORTEX_M_USBOTG_HS_DAINT) & 0xff);
+    /* checking current mode */
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        /* here, this is a 'end of transmission' interrupt. Let's handle each
+         * endpoint for which the interrupt rised */
+        uint16_t val = 0x1;
+        uint8_t ep_id = 0;
+        for (uint8_t i = 0; i < 16; ++i) {
+            if (daint & val) {
+                /* an iepint for this EP is active */
+                log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
+                /* now that transmit is complete, set ep state as IDLE */
+                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+            }
+            ep_id++;
+            val = val << 1;
+        }
 
+    } else {
+        /* here, this is a 'data received' interrupt */
+    }
+
+    /* calling upper handler */
     return errcode;
 }
 
@@ -367,8 +397,10 @@ static mbed_error_t rxflvl_handler(void)
                     // TODO:
 #ifndef CONFIG_USR_DEV_USBOTGHS_DMA
                     usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
-
 # if 0
+                    Why this ? Why not let oepint being executed when the copy is finished ?
+                    In the new driver, fifo is not reset, but flagged, to avoid setting
+                    again and again a new address even when not needed.
                     /* FIXME mkproper  In case of EP0, we have to manually check the completion and call the callback */
                     // Really ? its OEPINT which should handle this !
                     }

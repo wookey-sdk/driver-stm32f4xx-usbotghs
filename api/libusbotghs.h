@@ -178,7 +178,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode);
  * @return MBED_ERROR_NONE if data has been correctly transmitted into the internal
  * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
-mbed_error_t usbotghs_send_data(const uint8_t *src, uint32_t size, uint8_t ep);
+mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep);
 
 /*
  * Configure for receiving data. Receiving data is a triggering event, not a direct call.
