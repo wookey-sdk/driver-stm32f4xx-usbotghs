@@ -39,33 +39,18 @@
 #define USBOTG_HS_RX_CORE_FIFO_SZ 0x80 /* 512 bytes, unit is 32bits DWORD here */
 #define USBOTG_HS_TX_CORE_FIFO_SZ 0x80 /* 512 bytes, unit is 32bits DWORD here */
 
-#if CONFIG_USR_DEV_USBOTGHS_DMA
-/*
- * In DMA mode, the copy is done using DMA
- */
 static inline void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep)
 {
-}
-
-
-static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile uint32_t size, uint8_t ep)
-{
 #if CONFIG_USR_DEV_USBOTGHS_DMA
-    /* configuring DMA for this FIFO */
-    /* set EP0 FIFO using local buffer */
-    /* 3. lock FIFO (while DMA is running) */
-    /* 4. set Endpoint enabled (start the DMA transfer) */
-    /* 5. unlock FIFO now that DMA transfer is finished */
-#endif
+    /*
+     * In DMA mode, the copy is done using DMA
+     */
 
-}
 #else
-/*
- * With DMA mode deactivated, the copy is done manually
- */
-static inline void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep)
-{
-	uint32_t size_4bytes = size / 4;
+    /*
+     * With DMA mode deactivated, the copy is done manually
+     */
+    uint32_t size_4bytes = size / 4;
     uint32_t tmp;
 
     /* 4 bytes aligned copy from EP FIFO */
@@ -89,11 +74,19 @@ static inline void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint
 	default:
 		break;
 	}
+#endif
 }
 
 
 static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile uint32_t size, uint8_t ep)
 {
+#if CONFIG_USR_DEV_USBOTGHS_DMA
+    /* configuring DMA for this FIFO */
+    /* set EP0 FIFO using local buffer */
+    /* 3. lock FIFO (while DMA is running) */
+    /* 4. set Endpoint enabled (start the DMA transfer) */
+    /* 5. unlock FIFO now that DMA transfer is finished */
+#else
 	uint32_t size_4bytes = size / 4;
     uint32_t tmp = 0;
     // IP should has its own interrupts disable during ISR execution
@@ -101,32 +94,32 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile uint
     /* mask interrupts while writting Core FIFO */
     set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, 0xffffffff, 0);
 
+    /* manual copy to Core FIFO */
     for (uint32_t i = 0; i < size_4bytes; i++, src += 4){
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), *(const uint32_t *)src);
     }
     switch (size & 3) {
-        case 1:
-            write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), *(const uint8_t *)src);
-            break;
-        case 2:
-            write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), *(const uint16_t *)src);
-            break;
+        /* sequencialy write up to 3 bytes into tmp (depending on the carry)
+         * and write tmp to Core FIFO
+         * INFO: the sequencial bytes inclusion (up to 3) is managed by *removing*
+         * the switch/case breaks. Do not re-add it ! */
         case 3:
-            tmp  = ((const uint8_t*) src)[0];
+            tmp = ((const uint8_t*) src)[2] << 16;
+        case 2:
             tmp |= ((const uint8_t*) src)[1] << 8;
-            tmp |= ((const uint8_t*) src)[2] << 16;
+        case 1:
+            tmp  |= ((const uint8_t*) src)[0];
             write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
             break;
         default:
+            /* should never happend, complete switch */
             break;
     }
 
-    // IP should has its own interrupts disable during ISR execution
+    /* IP should has its own interrupts disable during ISR execution */
     set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, oldmask, 0xffffffff, 0);
-}
-
 #endif
-
+}
 
 mbed_error_t usbotghs_init_global_fifo(void)
 {
