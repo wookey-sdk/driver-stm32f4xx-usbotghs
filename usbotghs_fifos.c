@@ -34,10 +34,10 @@
 #include "usbotghs_handler.h"
 
 /*
- * Size of the USB OTG HS core internal FIFO
+ * Size of the USB OTG HS core internal FIFO (global config, not per EP)
  */
-#define USBOTG_HS_RX_CORE_FIFO_SZ 0x80 /* 512 bytes, unit is 32bits DWORD here */
-#define USBOTG_HS_TX_CORE_FIFO_SZ 0x80 /* 512 bytes, unit is 32bits DWORD here */
+#define USBOTG_HS_RX_CORE_FIFO_SZ 0x80 /* 128 bytes, unit is 32bits DWORD here */
+#define USBOTG_HS_TX_CORE_FIFO_SZ 0x80 /* 128 bytes, unit is 32bits DWORD here */
 
 static inline void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep)
 {
@@ -129,6 +129,7 @@ mbed_error_t usbotghs_init_global_fifo(void)
 	 *        and setup data. If thresholding is not enabled, at a minimum, this must be equal to
 	 *        1 max packet size of control endpoint 0 + 2 Words (for the status of the control
 	 *        OUT data packet) + 10 Words (for setup packets).
+     *        for  e.g. giving 64 bytes for max EP0 Pkt size, this means 64 + 2*wz + 10*wz
 	 *
 	 * See reference manual section 34.11 for peripheral FIFO architecture.
 	 * XXX: The sizes of TX FIFOs seems to be the size of TX FIFO #0 for
@@ -144,6 +145,7 @@ mbed_error_t usbotghs_init_global_fifo(void)
      * RXFD (RxFIFO depth, in 32bits DWORD)
      */
 	set_reg(r_CORTEX_M_USBOTG_HS_GRXFSIZ, USBOTG_HS_RX_CORE_FIFO_SZ, USBOTG_HS_GRXFSIZ_RXFD);
+    /* setting TX0FSIZ to */
 
     return MBED_ERROR_NONE;
 }
@@ -153,6 +155,16 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
     if (ep->id == 0) {
         /*
          * EndPoint 0 TX FIFO configuration (should store a least 4 64byte paquets)
+         */
+        /*  – Program the OTG_HS_TX0FSIZ register (depending on the FIFO number
+         *  chosen) to be able to transmit control IN data. At a minimum, this must be equal to
+         *  1 max packet size of control endpoint 0.
+         *
+         *  FIXME: this work is not made in the previous driver... Maybe we should correct this here.
+         */
+
+
+        /*
          */
         set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, USBOTG_HS_TX_CORE_FIFO_SZ, USBOTG_HS_DIEPTXF_INEPTXSA);
         set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, USBOTG_HS_TX_CORE_FIFO_SZ, USBOTG_HS_DIEPTXF_INEPTXFD);

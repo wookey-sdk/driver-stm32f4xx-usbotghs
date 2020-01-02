@@ -83,6 +83,8 @@ usbotghs_context_t *usbotghs_get_context(void)
 mbed_error_t usbotghs_declare(void)
 {
     e_syscall_ret ret = 0;
+
+    log_printf("[USBOTG][HS] Declaring device\n");
     memset((void*)&(ctx.dev), 0, sizeof(device_t));
 
     memcpy((void*)ctx.dev.name, devname, strlen(devname));
@@ -129,22 +131,18 @@ mbed_error_t usbotghs_declare(void)
     ctx.dev.irqs[0].posthook.action[3].instr = IRQ_PH_AND;
     ctx.dev.irqs[0].posthook.action[3].and.offset_dest = 0x18; /* MASK register offset */
     ctx.dev.irqs[0].posthook.action[3].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[3].and.mask = USBOTG_HS_GINTMSK_RXFLVLM_Msk; /* MASK register offset */
+    ctx.dev.irqs[0].posthook.action[3].and.mask =
+                 USBOTG_HS_GINTMSK_USBRST_Msk   |
+                 USBOTG_HS_GINTMSK_ENUMDNEM_Msk |
+                 USBOTG_HS_GINTMSK_ESUSPM_Msk   |
+                 USBOTG_HS_GINTMSK_USBSUSPM_Msk |
+                 USBOTG_HS_GINTMSK_SOFM_Msk     |
+                 USBOTG_HS_GINTMSK_OEPINT_Msk   |
+                 USBOTG_HS_GINTMSK_IEPINT_Msk   |
+                 USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
+                 USBOTG_HS_GINTMSK_PTXFEM_Msk   |
+				 USBOTG_HS_GINTMSK_RXFLVLM_Msk;
     ctx.dev.irqs[0].posthook.action[3].and.mode = 1; /* binary inversion */
-
-
-    ctx.dev.irqs[0].posthook.action[4].instr = IRQ_PH_AND;
-    ctx.dev.irqs[0].posthook.action[4].and.offset_dest = 0x18; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[4].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[4].and.mask = USBOTG_HS_GINTMSK_IEPINT_Msk; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[4].and.mode = 1; /* binary inversion */
-
-
-    ctx.dev.irqs[0].posthook.action[5].instr = IRQ_PH_AND;
-    ctx.dev.irqs[0].posthook.action[5].and.offset_dest = 0x18; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[5].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[5].and.mask = USBOTG_HS_GINTMSK_OEPINT_Msk; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[5].and.mode = 1; /* binary inversion */
 
 
 
@@ -280,6 +278,12 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* First, reset the PHY device connected to the core through ULPI interface */
+    log_printf("[USB HS] Mapping device\n");
+    if (sys_cfg(CFG_DEV_MAP, ctx.dev_desc)) {
+        log_printf("[USB HS] Unable to map USB device !!!\n");
+        errcode = MBED_ERROR_NOMEM;
+        goto err;
+    }
     if ((errcode = usbotghs_ulpi_reset()) != MBED_ERROR_NONE) {
         goto err;
     }
@@ -299,7 +303,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
             break;
         }
         case USBOTGHS_MODE_DEVICE: {
-            log_printf("[USB HS][DEVICE] initialize in Host mode\n");
+            log_printf("[USB HS][DEVICE] initialize in Device mode\n");
             if ((errcode = usbotghs_initialize_device()) != MBED_ERROR_NONE) {
                 goto err;
             }
@@ -646,4 +650,9 @@ mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep)
     mbed_error_t errcode = MBED_ERROR_NONE;
     ep = ep;
     return errcode;
+}
+
+void usbotghs_set_address(uint16_t addr)
+{
+    set_reg(r_CORTEX_M_USBOTG_HS_DCFG, addr, USBOTG_HS_DCFG_DAD);
 }

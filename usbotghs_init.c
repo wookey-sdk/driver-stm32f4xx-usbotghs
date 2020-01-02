@@ -107,6 +107,7 @@
  */
 mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
 {
+    log_printf("[USB HS] initializing the core\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
     int count = 0;
     uint32_t reg_value;
@@ -117,9 +118,11 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
      * are not mapped
      */
 
+
     /* 2. Program the following fields in the Global AHB Configuration (GAHBCFG)
      * register.
      */
+    log_printf("[USB HS] core init: set global AHB config\n");
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* enable DMA. On STM32F4, this is an external DMA (SoC DMA) */
     set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 1, USBOTG_HS_GAHBCFG_DMAEN);
@@ -128,6 +131,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0x3, USBOTG_HS_GAHBCFG_HBSTLEN);
 #endif
     /* mask the global interrupt mask */
+    log_printf("[USB HS] core init: mask the global interrupt msk\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0, USBOTG_HS_GAHBCFG_GINTMSK);
     /* non-periodic TxFIFO empty level (host mode or device with SFO mode) */
     if (mode == USBOTGHS_MODE_HOST) {
@@ -137,11 +141,15 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
         set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0, USBOTG_HS_GAHBCFG_PTXFELVL);
     }
 
+    log_printf("[USB HS] core init: clear PWRDWN\n");
+    /* clear the USB transiver powerdwn msk */
+	clear_reg_bits(r_CORTEX_M_USBOTG_HS_GCCFG, USBOTG_HS_GCCFG_PWRDWN_Msk);
 
     /*
      * 3. Program the following field in the Global Interrupt Mask (GINTMSK)
      *    register:
      */
+    log_printf("[USB HS] core init: clear global interrupt mask\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, USBOTG_HS_GINTMSK_RXFLVLM);
 
 
@@ -159,6 +167,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
         set_reg(r_CORTEX_M_USBOTG_HS_GUSBCFG, 1, USBOTG_HS_GUSBCFG_SRPCAP);
     }
 #endif
+    log_printf("[USB HS] core init: configure ULPI interractions\n");
 	reg_value = read_reg_value(r_CORTEX_M_USBOTG_HS_GUSBCFG);
 	/* Use the internal VBUS */
 	clear_reg_bits(&reg_value, USBOTG_HS_GUSBCFG_ULPIEVBUSD_Msk);
@@ -199,6 +208,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     /*
      * 5. The software must unmask the following bits in the GINTMSK register.
      */
+    log_printf("[USB HS] core init: unmask OTGINT & MMISM Int\n");
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
                  USBOTG_HS_GINTMSK_OTGINT_Msk | USBOTG_HS_GINTMSK_MMISM_Msk);
 
@@ -217,11 +227,14 @@ mbed_error_t usbotghs_initialize_device(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
+    log_printf("[USB HS] dev init: Device mode initialization...\n");
 #if CONFIG_USR_DEV_USBOTGHS_DMA
+    log_printf("[USB HS] dev init: Device mode with DMA support\n");
     /* replaced by DMA */
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, USBOTG_HS_GINTMSK_RXFLVLM);
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, USBOTG_HS_GINTMSK_NPTXFEM);
 #else
+    log_printf("[USB HS] dev init: Device mode without DMA support\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_NPTXFEM);
 #endif
@@ -230,6 +243,7 @@ mbed_error_t usbotghs_initialize_device(void)
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* DCFG DescDMA bit does not exist on STM32F4 implementation of the IP */
 #endif
+    log_printf("[USB HS] dev init: set speed to HS\n");
     /* set device speed to High Speed */
 	set_reg(r_CORTEX_M_USBOTG_HS_DCFG, 0x0, USBOTG_HS_DCFG_DSPD);
     /* send packets to the application. send handshake based on NAK & STALL bits for
@@ -242,10 +256,9 @@ mbed_error_t usbotghs_initialize_device(void)
 
 
 
-    /* deactivate the USB transiver */
-	clear_reg_bits(r_CORTEX_M_USBOTG_HS_GCCFG, USBOTG_HS_GCCFG_PWRDWN_Msk);
 
 #if CONFIG_USR_DEV_USBOTGHS_DMA
+    log_printf("[USB HS] dev init: set DMA thresholds\n");
     /* set device threshold */
     /* Arbitrer parking enable (avoid underrun) */
 	set_reg(r_CORTEX_M_USBOTG_HS_DTHRCTL, 1, USBOTG_HS_DTHRCTL_ARPEN);
@@ -265,8 +278,10 @@ mbed_error_t usbotghs_initialize_device(void)
 #endif
     /* configure the ULPI backend of the core */
 
+    log_printf("[USB HS] dev init: set ULPI backend\n");
     set_reg(r_CORTEX_M_USBOTG_HS_DCTL, 0, USBOTG_HS_DCTL_SDIS);
 
+    log_printf("[USB HS] dev init: enable nominal Ints\n");
     /* enable reset, enumeration done, early suspend, usb suspend & start-of-frame
      * IEP and OEP int are handled at USB reset handling time */
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
@@ -276,6 +291,8 @@ mbed_error_t usbotghs_initialize_device(void)
                  USBOTG_HS_GINTMSK_USBSUSPM_Msk |
                  USBOTG_HS_GINTMSK_SOFM_Msk);
 
+    log_printf("[USB HS] dev init: unmask the global interrupt msk\n");
+    set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 1, USBOTG_HS_GAHBCFG_GINTMSK);
     return errcode;
 }
 

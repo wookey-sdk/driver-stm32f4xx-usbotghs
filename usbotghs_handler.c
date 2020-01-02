@@ -299,7 +299,7 @@ static mbed_error_t oepint_handler(void)
                 /* now that transmit is complete, set ep state as IDLE */
                 ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                 /* calling upper handler, transmitted size read from DOEPSTS */
-                //TODO: errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, size, ep_id);
+                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
             }
             ep_id++;
             val = val << 1;
@@ -336,7 +336,7 @@ static mbed_error_t iepint_handler(void)
                 /* now that transmit is complete, set ep state as IDLE */
                 ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                 /* calling upper handler, transmitted size read from DIEPSTS */
-                // TODO: errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, size, ep_id);
+                errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
             }
             ep_id++;
             val = val << 1;
@@ -620,6 +620,7 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
 	uint32_t intsts = sr;
 	uint32_t intmsk = dr;
 
+	log_printf("[USB HS] IRQ Handler\n");
 	if (intsts & USBOTG_HS_GINTSTS_CMOD_Msk){
 		log_printf("[USB HS] Int in Host mode !\n");
 	}
@@ -636,6 +637,7 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
          */
         if (val & 1)
         {
+            log_printf("[USB HS] IRQ Handler for event %d\n", i);
             usb_otg_hs_isr_handlers[i]();
         }
     }
