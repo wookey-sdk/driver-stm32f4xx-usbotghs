@@ -104,6 +104,28 @@ typedef enum {
     USBOTG_HS_EP_TYPE_INT         = 3,
 } usbotghs_ep_type_t;
 
+/*
+ * Global device state, depending on currently send/received data.
+ * This flags are (mostly) set by rxflvl handler and can be read back
+ * at oepint/iepint time to be informed of which data type is currently
+ * waiting for treatment (reception case) or has been sent (transmission
+ * case). The driver reset the current flag to IDLE automatically when the
+ * data has be treated in iepint/oepint end of function.
+ */
+typedef enum {
+    USBOTG_HS_EP_STATE_IDLE  = 0,
+    USBOTG_HS_EP_STATE_SETUP = 1,
+    USBOTG_HS_EP_STATE_STATUS = 2,
+    USBOTG_HS_EP_STATE_STALL = 3,
+    USBOTG_HS_EP_STATE_DATA_IN = 4,
+    USBOTG_HS_EP_STATE_DATA_OUT = 5,
+    USBOTG_HS_EP_STATE_INVALID = 6,
+} usbotghs_ep_state_t;
+
+typedef enum {
+    USBOTG_HS_EP_DIR_IN,
+    USBOTG_HS_EP_DIR_OUT,
+} usbotghs_ep_dir_t;
 
 /*********************************************************************************
  * About handlers
@@ -266,5 +288,7 @@ void usbotghs_set_address(uint16_t addr);
 void usbotghs_bind(void);
 
 void usbotghs_unbind(void);
+
+usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir);
 
 #endif /*!LIBUSBOTGHS_H_ */

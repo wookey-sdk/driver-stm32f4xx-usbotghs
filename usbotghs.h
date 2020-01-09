@@ -61,15 +61,6 @@
 
 /* setup packet, to be passed to upper libctrl */
 
-typedef enum {
-    USBOTG_HS_EP_STATE_IDLE  = 0,
-    USBOTG_HS_EP_STATE_SETUP = 1,
-    USBOTG_HS_EP_STATE_STATUS = 2,
-    USBOTG_HS_EP_STATE_STALL = 3,
-    USBOTG_HS_EP_STATE_DATA_IN = 4,
-    USBOTG_HS_EP_STATE_DATA_OUT = 5,
-} usbotghs_ep_state_t;
-
 /*
  * local context hold by the driver
  */

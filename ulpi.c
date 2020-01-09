@@ -40,15 +40,15 @@ mbed_error_t usbotghs_ulpi_reset(void)
 	 */
     /* TODO: the PHY GPIOs should be defined through a generated header,
      * not hardcoded */
-	if ((err = sys_cfg(CFG_GPIO_SET, (uint8_t)((('E' - 'A') << 4) + 13), 1)) != SYS_E_DONE) {
-        //errcode = MBED_ERROR_INITFAIL;
+	if ((err = sys_cfg(CFG_GPIO_SET, (uint8_t)(((usb_otg_hs_dev_infos.gpios[USB_HS_RESET].port << 4) + usb_otg_hs_dev_infos.gpios[USB_HS_RESET].pin)), 1)) != SYS_E_DONE) {
+        errcode = MBED_ERROR_INITFAIL;
         log_printf("failed to reset ULPI: GPIO set syscall returns %d\n", err);
         goto end;
     }
     /* waiting at least 5 milliseconds */
     sys_sleep(SLEEP_MODE_DEEP, 5);
-	if ((err = sys_cfg(CFG_GPIO_SET, (uint8_t)((('E' - 'A') << 4) + 13), 0)) != SYS_E_DONE) {
-        //errcode = MBED_ERROR_INITFAIL;
+	if ((err = sys_cfg(CFG_GPIO_SET, (uint8_t)(((usb_otg_hs_dev_infos.gpios[USB_HS_RESET].port << 4) + usb_otg_hs_dev_infos.gpios[USB_HS_RESET].pin)), 0)) != SYS_E_DONE) {
+        errcode = MBED_ERROR_INITFAIL;
         log_printf("failed to reset ULPI: GPIO clear syscall returns %d\n", err);
         goto end;
     }

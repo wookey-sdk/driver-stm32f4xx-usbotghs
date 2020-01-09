@@ -102,6 +102,48 @@ typedef enum {
     USBOTGHS_IT_WKUPINT    = 31,   /*< Resume/Wakeup event */
 } usbotghs_int_id_t;
 
+
+#if CONFIG_USR_DRV_USBOTGHS_DEBUG
+/* This table is made only as a debug helper, in order to assicate the
+ * interrupt identifier with a full-text name for pretty printing.
+ * This consume space in the device flash memory and should be used only
+ * for debug purpose.
+ */
+static const char *usbotghs_int_name[] = {
+    "CMOD",
+    "MMIS",
+    "OTGINT",
+    "SOF",
+    "RXFLVL",
+    "NPTXE",
+    "GINAKEFF",
+    "GONAKEFF",
+    "RESERVED8",
+    "RESERVED9",
+    "ESUSP",
+    "USBSUSP",
+    "USBRST",
+    "ENUMDNE",
+    "ISOODRP",
+    "EOPF",
+    "RESERVED16",
+    "EPMISM",
+    "IEPINT",
+    "OEPINT",
+    "IISOIXFR",
+    "IPXFR",
+    "RESERVED22",
+    "RESERVED23",
+    "HPRTINT",
+    "HCINTT",
+    "PTXFE",
+    "RESERVED27",
+    "CIDSCHG",
+    "DISCINT",
+    "SRQINT",
+    "WKUPINT",
+};
+#endif
 /*
  * Generic handler, used by default.
  */
@@ -163,6 +205,7 @@ static mbed_error_t reserved_handler(void)
  */
 static mbed_error_t reset_handler(void)
 {
+    log_printf("[USB HS][RESET] received USB Reset");
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
     for (uint8_t i = 0; i < USBOTGHS_MAX_OUT_EP; ++i) {
@@ -278,11 +321,13 @@ static mbed_error_t oepint_handler(void)
         /* here, this is a 'data received' interrupt */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
+        printf("[USBOTG][HS] handling received data\n");
         for (uint8_t i = 0; i < 16; ++i) {
             if (daint & val) {
-                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_IN;
+                printf("[USBOTG][HS] received data on ep %x\n", ep_id);
                 /* calling upper handler */
-                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
             val = val << 1;
@@ -297,9 +342,9 @@ static mbed_error_t oepint_handler(void)
                 /* an iepint for this EP is active */
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
                 /* now that transmit is complete, set ep state as IDLE */
-                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                 /* calling upper handler, transmitted size read from DOEPSTS */
-                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
             val = val << 1;
@@ -334,9 +379,9 @@ static mbed_error_t iepint_handler(void)
                 /* an iepint for this EP is active */
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
                 /* now that transmit is complete, set ep state as IDLE */
-                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                 /* calling upper handler, transmitted size read from DIEPSTS */
                 errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
             val = val << 1;
@@ -349,9 +394,9 @@ static mbed_error_t iepint_handler(void)
             if (daint & val) {
                 /* an iepint for this EP is active */
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
-                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_IN;
                 /* calling upper handler */
                 errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
             val = val << 1;
@@ -429,6 +474,7 @@ static mbed_error_t rxflvl_handler(void)
                     }
                     log_printf("[USB HS][RXFLVL] EP0 Global OUT NAK effective\n");
                     ctx->gonak_active = true;
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
                     break;
                 }
                 case PKT_STATUS_OUT_DATA_PKT_RECV:
@@ -444,6 +490,7 @@ static mbed_error_t rxflvl_handler(void)
                     // TODO:
 #ifndef CONFIG_USR_DEV_USBOTGHS_DMA
                     usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN;
 # if 0
                     Why this ? Why not let oepint being executed when the copy is finished ?
                     In the new driver, fifo is not reset, but flagged, to avoid setting
@@ -476,6 +523,7 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
                     break;
                 }
                 case PKT_STATUS_SETUP_TRANS_COMPLETE:
@@ -485,6 +533,7 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
                     }
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
                     break;
                 }
                 case PKT_STATUS_SETUP_PKT_RECEIVED:
@@ -504,6 +553,7 @@ static mbed_error_t rxflvl_handler(void)
                     // TODO: read_fifo(setup_packet, bcnt, epnum);
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP;
                     break;
                 }
                 default:
@@ -547,7 +597,10 @@ static mbed_error_t mmism_handler(void)
     return errcode;
 }
 
-
+/*
+ * Early suspend handler. Received when an Idle state has been
+ * detected on the USB for 3ms.
+ */
 static mbed_error_t esuspend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -555,6 +608,10 @@ static mbed_error_t esuspend_handler(void)
     return errcode;
 }
 
+/*
+ * USB suspend handler. Received when there is no activity on the data
+ * lines (including EP0) for a period of 3ms.
+ */
 static mbed_error_t ususpend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -637,7 +694,10 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
          */
         if (val & 1)
         {
-            log_printf("[USB HS] IRQ Handler for event %d\n", i);
+            /* INFO: as log_printf is a *macro* only resolved by cpp in debug mode,
+             * usbotghs_int_name is accedded only in this mode. There is no
+             * invalid memory access in the other case. */
+            log_printf("[USB HS] IRQ Handler for event %d (%s)\n", i, usbotghs_int_name[i]);
             usb_otg_hs_isr_handlers[i]();
         }
     }

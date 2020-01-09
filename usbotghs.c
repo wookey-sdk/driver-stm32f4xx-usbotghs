@@ -73,11 +73,11 @@ static const char *devname = "usb-otg-hs";
 // TODO to use static uint8_t 	setup_packet[8];
 
 /* local context. Only one as there is one USB OTG device per SoC */
-static volatile usbotghs_context_t ctx = { 0 };
+static volatile usbotghs_context_t usbotghs_ctx = { 0 };
 
 usbotghs_context_t *usbotghs_get_context(void)
 {
-    return (usbotghs_context_t *)&ctx;
+    return (usbotghs_context_t *)&usbotghs_ctx;
 }
 
 mbed_error_t usbotghs_declare(void)
@@ -85,22 +85,22 @@ mbed_error_t usbotghs_declare(void)
     e_syscall_ret ret = 0;
 
     log_printf("[USBOTG][HS] Declaring device\n");
-    memset((void*)&(ctx.dev), 0, sizeof(device_t));
+    memset((void*)&(usbotghs_ctx.dev), 0, sizeof(device_t));
 
-    memcpy((void*)ctx.dev.name, devname, strlen(devname));
+    memcpy((void*)usbotghs_ctx.dev.name, devname, strlen(devname));
 
-    ctx.dev.address = USB_OTG_HS_BASE;
-    ctx.dev.size = 0x4000;
-    ctx.dev.irq_num = 1;
+    usbotghs_ctx.dev.address = USB_OTG_HS_BASE;
+    usbotghs_ctx.dev.size = 0x4000;
+    usbotghs_ctx.dev.irq_num = 1;
     /* device is mapped voluntary and will be activated after the full
      * authentication sequence
      */
-    ctx.dev.map_mode = DEV_MAP_VOLUNTARY;
+    usbotghs_ctx.dev.map_mode = DEV_MAP_VOLUNTARY;
 
     /* IRQ configuration */
-    ctx.dev.irqs[0].handler = USBOTGHS_IRQHandler;
-    ctx.dev.irqs[0].irq = OTG_HS_IRQ; /* starting with STACK */
-    ctx.dev.irqs[0].mode = IRQ_ISR_FORCE_MAINTHREAD; /* if ISR force MT immediat execution, use FORCE_MAINTHREAD instead of STANDARD, and activate FISR permission */
+    usbotghs_ctx.dev.irqs[0].handler = USBOTGHS_IRQHandler;
+    usbotghs_ctx.dev.irqs[0].irq = OTG_HS_IRQ; /* starting with STACK */
+    usbotghs_ctx.dev.irqs[0].mode = IRQ_ISR_FORCE_MAINTHREAD; /* if ISR force MT immediat execution, use FORCE_MAINTHREAD instead of STANDARD, and activate FISR permission */
 
     /*
      * IRQ posthook configuration
@@ -109,29 +109,29 @@ mbed_error_t usbotghs_declare(void)
      * while the ISR has not been executed.
      * register read can be saved into 'status' and 'data' and given to the ISR in 'sr' and 'dr' argument
      */
-    ctx.dev.irqs[0].posthook.status = 0x0014; /* SR is first read */
-    ctx.dev.irqs[0].posthook.data = 0x0018; /* Data reg  is 2nd read */
+    usbotghs_ctx.dev.irqs[0].posthook.status = 0x0014; /* SR is first read */
+    usbotghs_ctx.dev.irqs[0].posthook.data = 0x0018; /* Data reg  is 2nd read */
 
 
-    ctx.dev.irqs[0].posthook.action[0].instr = IRQ_PH_READ;
-    ctx.dev.irqs[0].posthook.action[0].read.offset = 0x0014;
+    usbotghs_ctx.dev.irqs[0].posthook.action[0].instr = IRQ_PH_READ;
+    usbotghs_ctx.dev.irqs[0].posthook.action[0].read.offset = 0x0014;
 
 
-    ctx.dev.irqs[0].posthook.action[1].instr = IRQ_PH_READ;
-    ctx.dev.irqs[0].posthook.action[1].read.offset = 0x0018;
+    usbotghs_ctx.dev.irqs[0].posthook.action[1].instr = IRQ_PH_READ;
+    usbotghs_ctx.dev.irqs[0].posthook.action[1].read.offset = 0x0018;
 
 
-    ctx.dev.irqs[0].posthook.action[2].instr = IRQ_PH_MASK;
-    ctx.dev.irqs[0].posthook.action[2].mask.offset_dest = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[2].mask.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[2].mask.offset_mask = 0x18; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[2].mask.mode = 0; /* no binary inversion */
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].instr = IRQ_PH_MASK;
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_dest = 0x14; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_src = 0x14; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_mask = 0x18; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.mode = 0; /* no binary inversion */
 
 
-    ctx.dev.irqs[0].posthook.action[3].instr = IRQ_PH_AND;
-    ctx.dev.irqs[0].posthook.action[3].and.offset_dest = 0x18; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[3].and.offset_src = 0x14; /* MASK register offset */
-    ctx.dev.irqs[0].posthook.action[3].and.mask =
+    usbotghs_ctx.dev.irqs[0].posthook.action[3].instr = IRQ_PH_AND;
+    usbotghs_ctx.dev.irqs[0].posthook.action[3].and.offset_dest = 0x18; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[3].and.offset_src = 0x14; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mask =
                  USBOTG_HS_GINTMSK_USBRST_Msk   |
                  USBOTG_HS_GINTMSK_ENUMDNEM_Msk |
                  USBOTG_HS_GINTMSK_ESUSPM_Msk   |
@@ -142,90 +142,90 @@ mbed_error_t usbotghs_declare(void)
                  USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
                  USBOTG_HS_GINTMSK_PTXFEM_Msk   |
 				 USBOTG_HS_GINTMSK_RXFLVLM_Msk;
-    ctx.dev.irqs[0].posthook.action[3].and.mode = 1; /* binary inversion */
+    usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mode = 1; /* binary inversion */
 
 
 
     /* Now let's configure the GPIOs */
-    ctx.dev.gpio_num = 13;
+    usbotghs_ctx.dev.gpio_num = 13;
 
 	/* ULPI_D0 */
-    ctx.dev.gpios[0].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
-    ctx.dev.gpios[0].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_D0].port;
-    ctx.dev.gpios[0].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_D0].pin; /* 3 */
-    ctx.dev.gpios[0].mode         = GPIO_PIN_ALTERNATE_MODE;
-    ctx.dev.gpios[0].pupd         = GPIO_NOPULL;
-    ctx.dev.gpios[0].type         = GPIO_PIN_OTYPER_PP;
-    ctx.dev.gpios[0].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-    ctx.dev.gpios[0].afr          = GPIO_AF_OTG_HS;
+    usbotghs_ctx.dev.gpios[0].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+    usbotghs_ctx.dev.gpios[0].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_D0].port;
+    usbotghs_ctx.dev.gpios[0].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_D0].pin; /* 3 */
+    usbotghs_ctx.dev.gpios[0].mode         = GPIO_PIN_ALTERNATE_MODE;
+    usbotghs_ctx.dev.gpios[0].pupd         = GPIO_NOPULL;
+    usbotghs_ctx.dev.gpios[0].type         = GPIO_PIN_OTYPER_PP;
+    usbotghs_ctx.dev.gpios[0].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+    usbotghs_ctx.dev.gpios[0].afr          = GPIO_AF_OTG_HS;
 
 	/* ULPI_CLK */
-    ctx.dev.gpios[1].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
-    ctx.dev.gpios[1].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_CLK].port;
-    ctx.dev.gpios[1].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_CLK].pin; /* 3 */
-    ctx.dev.gpios[1].mode         = GPIO_PIN_ALTERNATE_MODE;
-    ctx.dev.gpios[1].pupd         = GPIO_NOPULL;
-    ctx.dev.gpios[1].type         = GPIO_PIN_OTYPER_PP;
-    ctx.dev.gpios[1].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-    ctx.dev.gpios[1].afr          = GPIO_AF_OTG_HS;
+    usbotghs_ctx.dev.gpios[1].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+    usbotghs_ctx.dev.gpios[1].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_CLK].port;
+    usbotghs_ctx.dev.gpios[1].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_CLK].pin; /* 3 */
+    usbotghs_ctx.dev.gpios[1].mode         = GPIO_PIN_ALTERNATE_MODE;
+    usbotghs_ctx.dev.gpios[1].pupd         = GPIO_NOPULL;
+    usbotghs_ctx.dev.gpios[1].type         = GPIO_PIN_OTYPER_PP;
+    usbotghs_ctx.dev.gpios[1].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+    usbotghs_ctx.dev.gpios[1].afr          = GPIO_AF_OTG_HS;
 
     for (uint8_t i = USB_HS_ULPI_D1; i <= USB_HS_ULPI_D7; ++i) {
         /* INFO: for this loop to work, USBOTG_HS_ULPI_D1 must start at index 2
          * in the JSON file */
         /* ULPI_Di */
-        ctx.dev.gpios[i].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
-        ctx.dev.gpios[i].kref.port    = usb_otg_hs_dev_infos.gpios[i].port;
-        ctx.dev.gpios[i].kref.pin     = usb_otg_hs_dev_infos.gpios[i].pin;
-        ctx.dev.gpios[i].mode         = GPIO_PIN_ALTERNATE_MODE;
-        ctx.dev.gpios[i].pupd         = GPIO_NOPULL;
-        ctx.dev.gpios[i].type         = GPIO_PIN_OTYPER_PP;
-        ctx.dev.gpios[i].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-        ctx.dev.gpios[i].afr          = GPIO_AF_OTG_HS;
+        usbotghs_ctx.dev.gpios[i].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+        usbotghs_ctx.dev.gpios[i].kref.port    = usb_otg_hs_dev_infos.gpios[i].port;
+        usbotghs_ctx.dev.gpios[i].kref.pin     = usb_otg_hs_dev_infos.gpios[i].pin;
+        usbotghs_ctx.dev.gpios[i].mode         = GPIO_PIN_ALTERNATE_MODE;
+        usbotghs_ctx.dev.gpios[i].pupd         = GPIO_NOPULL;
+        usbotghs_ctx.dev.gpios[i].type         = GPIO_PIN_OTYPER_PP;
+        usbotghs_ctx.dev.gpios[i].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+        usbotghs_ctx.dev.gpios[i].afr          = GPIO_AF_OTG_HS;
     }
 
     /* ULPI_STP */
-    ctx.dev.gpios[9].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
-    ctx.dev.gpios[9].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_STP].port;
-    ctx.dev.gpios[9].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_STP].pin; /* 3 */
-    ctx.dev.gpios[9].mode         = GPIO_PIN_ALTERNATE_MODE;
-    ctx.dev.gpios[9].pupd         = GPIO_NOPULL;
-    ctx.dev.gpios[9].type         = GPIO_PIN_OTYPER_PP;
-    ctx.dev.gpios[9].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-    ctx.dev.gpios[9].afr          = GPIO_AF_OTG_HS;
+    usbotghs_ctx.dev.gpios[9].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+    usbotghs_ctx.dev.gpios[9].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_STP].port;
+    usbotghs_ctx.dev.gpios[9].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_STP].pin; /* 3 */
+    usbotghs_ctx.dev.gpios[9].mode         = GPIO_PIN_ALTERNATE_MODE;
+    usbotghs_ctx.dev.gpios[9].pupd         = GPIO_NOPULL;
+    usbotghs_ctx.dev.gpios[9].type         = GPIO_PIN_OTYPER_PP;
+    usbotghs_ctx.dev.gpios[9].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+    usbotghs_ctx.dev.gpios[9].afr          = GPIO_AF_OTG_HS;
 
     /* ULPI_DIR */
-    ctx.dev.gpios[10].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
-    ctx.dev.gpios[10].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_DIR].port;
-    ctx.dev.gpios[10].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_DIR].pin; /* 3 */
-    ctx.dev.gpios[10].mode         = GPIO_PIN_ALTERNATE_MODE;
-    ctx.dev.gpios[10].pupd         = GPIO_NOPULL;
-    ctx.dev.gpios[10].type         = GPIO_PIN_OTYPER_PP;
-    ctx.dev.gpios[10].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-    ctx.dev.gpios[10].afr          = GPIO_AF_OTG_HS;
+    usbotghs_ctx.dev.gpios[10].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+    usbotghs_ctx.dev.gpios[10].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_DIR].port;
+    usbotghs_ctx.dev.gpios[10].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_DIR].pin; /* 3 */
+    usbotghs_ctx.dev.gpios[10].mode         = GPIO_PIN_ALTERNATE_MODE;
+    usbotghs_ctx.dev.gpios[10].pupd         = GPIO_NOPULL;
+    usbotghs_ctx.dev.gpios[10].type         = GPIO_PIN_OTYPER_PP;
+    usbotghs_ctx.dev.gpios[10].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+    usbotghs_ctx.dev.gpios[10].afr          = GPIO_AF_OTG_HS;
 
     /* ULPI_NXT */
-    ctx.dev.gpios[11].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+    usbotghs_ctx.dev.gpios[11].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
 
-    ctx.dev.gpios[11].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_NXT].port;
-    ctx.dev.gpios[11].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_NXT].pin; /* 3 */
-    ctx.dev.gpios[11].mode         = GPIO_PIN_ALTERNATE_MODE;
-    ctx.dev.gpios[11].pupd         = GPIO_NOPULL;
-    ctx.dev.gpios[11].type         = GPIO_PIN_OTYPER_PP;
-    ctx.dev.gpios[11].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-    ctx.dev.gpios[11].afr          = GPIO_AF_OTG_HS;
+    usbotghs_ctx.dev.gpios[11].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_NXT].port;
+    usbotghs_ctx.dev.gpios[11].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_ULPI_NXT].pin; /* 3 */
+    usbotghs_ctx.dev.gpios[11].mode         = GPIO_PIN_ALTERNATE_MODE;
+    usbotghs_ctx.dev.gpios[11].pupd         = GPIO_NOPULL;
+    usbotghs_ctx.dev.gpios[11].type         = GPIO_PIN_OTYPER_PP;
+    usbotghs_ctx.dev.gpios[11].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+    usbotghs_ctx.dev.gpios[11].afr          = GPIO_AF_OTG_HS;
 
     /* Reset */
-    ctx.dev.gpios[12].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
+    usbotghs_ctx.dev.gpios[12].mask         = GPIO_MASK_SET_MODE | GPIO_MASK_SET_PUPD | GPIO_MASK_SET_TYPE | GPIO_MASK_SET_SPEED | GPIO_MASK_SET_AFR;
 
-    ctx.dev.gpios[12].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_RESET].port;
-    ctx.dev.gpios[12].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_RESET].pin; /* 3 */
-    ctx.dev.gpios[12].mode         = GPIO_PIN_OUTPUT_MODE;
-    ctx.dev.gpios[12].pupd         = GPIO_PULLUP;//GPIO_PULLDOWN;
-    ctx.dev.gpios[12].type         = GPIO_PIN_OTYPER_PP;
-    ctx.dev.gpios[12].speed        = GPIO_PIN_VERY_HIGH_SPEED;
-    ctx.dev.gpios[12].afr          = GPIO_AF_OTG_HS;
+    usbotghs_ctx.dev.gpios[12].kref.port    = usb_otg_hs_dev_infos.gpios[USB_HS_RESET].port;
+    usbotghs_ctx.dev.gpios[12].kref.pin     = usb_otg_hs_dev_infos.gpios[USB_HS_RESET].pin; /* 3 */
+    usbotghs_ctx.dev.gpios[12].mode         = GPIO_PIN_OUTPUT_MODE;
+    usbotghs_ctx.dev.gpios[12].pupd         = GPIO_PULLUP;//GPIO_PULLDOWN;
+    usbotghs_ctx.dev.gpios[12].type         = GPIO_PIN_OTYPER_PP;
+    usbotghs_ctx.dev.gpios[12].speed        = GPIO_PIN_VERY_HIGH_SPEED;
+    usbotghs_ctx.dev.gpios[12].afr          = GPIO_AF_OTG_HS;
 
-    if ((ret == sys_init(INIT_DEVACCESS, (device_t*)&(ctx.dev), (int*)&(ctx.dev_desc))) != SYS_E_DONE) {
+    if ((ret == sys_init(INIT_DEVACCESS, (device_t*)&(usbotghs_ctx.dev), (int*)&(usbotghs_ctx.dev_desc))) != SYS_E_DONE) {
         return MBED_ERROR_UNKNOWN;
     }
     return MBED_ERROR_NONE;
@@ -279,7 +279,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* First, reset the PHY device connected to the core through ULPI interface */
     log_printf("[USB HS] Mapping device\n");
-    if (sys_cfg(CFG_DEV_MAP, ctx.dev_desc)) {
+    if (sys_cfg(CFG_DEV_MAP, usbotghs_ctx.dev_desc)) {
         log_printf("[USB HS] Unable to map USB device !!!\n");
         errcode = MBED_ERROR_NOMEM;
         goto err;
@@ -314,28 +314,28 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
             goto err;
             break;
     }
-    ctx.mode = mode;
+    usbotghs_ctx.mode = mode;
 
     /* initialize EP0, which is both IN & OUT EP */
-    ctx.in_eps[0].id = 0;
-    ctx.in_eps[0].configured = false; /* wait for reset */
-    ctx.in_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
-    ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
-    ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
-    ctx.in_eps[0].fifo = NULL; /* not yet configured */
-    ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
-    ctx.in_eps[0].fifo_size = 0; /* not yet configured */
-    ctx.in_eps[0].fifo_lck = false;
+    usbotghs_ctx.in_eps[0].id = 0;
+    usbotghs_ctx.in_eps[0].configured = false; /* wait for reset */
+    usbotghs_ctx.in_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
+    usbotghs_ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
+    usbotghs_ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    usbotghs_ctx.in_eps[0].fifo = NULL; /* not yet configured */
+    usbotghs_ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
+    usbotghs_ctx.in_eps[0].fifo_size = 0; /* not yet configured */
+    usbotghs_ctx.in_eps[0].fifo_lck = false;
 
-    ctx.out_eps[0].id = 0;
-    ctx.out_eps[0].configured = false; /* wait for reset */
-    ctx.out_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
-    ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
-    ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
-    ctx.out_eps[0].fifo = 0; /* not yet configured */
-    ctx.out_eps[0].fifo_idx = 0; /* not yet configured */
-    ctx.out_eps[0].fifo_size = 0; /* not yet configured */
-    ctx.in_eps[0].fifo_lck = false;
+    usbotghs_ctx.out_eps[0].id = 0;
+    usbotghs_ctx.out_eps[0].configured = false; /* wait for reset */
+    usbotghs_ctx.out_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
+    usbotghs_ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
+    usbotghs_ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    usbotghs_ctx.out_eps[0].fifo = 0; /* not yet configured */
+    usbotghs_ctx.out_eps[0].fifo_idx = 0; /* not yet configured */
+    usbotghs_ctx.out_eps[0].fifo_size = 0; /* not yet configured */
+    usbotghs_ctx.in_eps[0].fifo_lck = false;
 
 err:
     return errcode;
@@ -655,4 +655,26 @@ mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep)
 void usbotghs_set_address(uint16_t addr)
 {
     set_reg(r_CORTEX_M_USBOTG_HS_DCFG, addr, USBOTG_HS_DCFG_DAD);
+}
+
+usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir)
+{
+    if (dir == USBOTG_HS_EP_DIR_IN && epnum >= USBOTGHS_MAX_IN_EP) {
+        return USBOTG_HS_EP_STATE_INVALID;
+    }
+    if (dir == USBOTG_HS_EP_DIR_OUT && epnum >= USBOTGHS_MAX_OUT_EP) {
+        return USBOTG_HS_EP_STATE_INVALID;
+    }
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            return usbotghs_ctx.in_eps[epnum].state;
+            break;
+        case USBOTG_HS_EP_DIR_OUT:
+            return usbotghs_ctx.out_eps[epnum].state;
+            break;
+        default:
+            return USBOTG_HS_EP_STATE_INVALID;
+            break;
+    }
+    return USBOTG_HS_EP_STATE_INVALID;
 }

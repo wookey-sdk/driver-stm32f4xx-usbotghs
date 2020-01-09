@@ -141,9 +141,8 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
         set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0, USBOTG_HS_GAHBCFG_PTXFELVL);
     }
 
+	/* Wait for master AHB automaton to be in IDLE state */
     log_printf("[USB HS] core init: clear PWRDWN\n");
-    /* clear the USB transiver powerdwn msk */
-	clear_reg_bits(r_CORTEX_M_USBOTG_HS_GCCFG, USBOTG_HS_GCCFG_PWRDWN_Msk);
 
     /*
      * 3. Program the following field in the Global Interrupt Mask (GINTMSK)
@@ -157,6 +156,10 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
      * 4. Program the following fields in GUSBCFG register (configure PHY
      * interactions and HNP/SRP capabilities).
      */
+
+    /* clear the USB transiver powerdwn msk */
+	clear_reg_bits(r_CORTEX_M_USBOTG_HS_GCCFG, USBOTG_HS_GCCFG_PWRDWN_Msk);
+
     /* SRP and HNP capable bits are not described in the USB OTG HS
      * TODO: STM32F4 datasheet. It would be intereseting to check if they can
      * be used in device and host mode in HS case too */
@@ -185,8 +188,9 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
 
     /* writing back the global configuration register */
 	write_reg_value(r_CORTEX_M_USBOTG_HS_GUSBCFG, reg_value);
+    log_printf("[USB HS] core init: GUSBCFG is %x %x %x %x\n", reg_value >> 24, (reg_value >> 16) & 0xff, (reg_value >> 8) & 0xff, reg_value & 0xff);
 
-	/* Wait for master AHB automaton to be in IDLE state */
+	/* Core soft reset must be issued after PHY configuration */
 	/* Wait for AHB master idle */
     while (!get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_AHBIDL)) {
         if (++count >  USBOTGHS_REG_CHECK_TIMEOUT) {
@@ -195,14 +199,23 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
             goto err;
         }
     }
-	/* Core soft reset must be issued after PHY configuration */
+
+    log_printf("[USB HS] AHB idle after %d loops\n", count);
+
+
     count = 0;
     set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, 1, USBOTG_HS_GRSTCTL_CSRST);
     while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_CSRST)) {
         if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
             log_printf("HANG! Core Soft RESET\n");
             errcode = MBED_ERROR_BUSY;
+            goto err;
         }
+    }
+    log_printf("[USB HS] Core acknowledged reset after %d loops\n", count);
+    /* 3 PHY clocks wait, (active wait here, as sys_sleep() is too slow */
+	for (uint32_t i = 0; i < 0xff; i++) {
+		continue;
     }
 
     /*
