@@ -205,12 +205,13 @@ static mbed_error_t reserved_handler(void)
  */
 static mbed_error_t reset_handler(void)
 {
-    log_printf("[USB HS][RESET] received USB Reset");
+    log_printf("[USB HS][RESET] received USB Reset\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
     for (uint8_t i = 0; i < USBOTGHS_MAX_OUT_EP; ++i) {
         /* if Out EPi is configured, set DOEPCTLi.SNAK to 1 */
         if (ctx->out_eps[i].configured) {
+            log_printf("[USB HS][RESET] activate SNAK for out_ep %d\n", i);
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(i),
                          USBOTG_HS_DOEPCTL_CNAK_Msk);
         }
@@ -235,29 +236,48 @@ static mbed_error_t reset_handler(void)
                  USBOTG_HS_DIEPMSK_XFRCM_Msk |
                  USBOTG_HS_DIEPMSK_TOM_Msk);
 
+    log_printf("[USB HS][RESET] initialize global fifo\n");
     if ((errcode = usbotghs_init_global_fifo()) != MBED_ERROR_NONE) {
         goto err;
     }
 
+    log_printf("[USB HS][RESET] initialize EP0 fifo\n");
     /* fifo is RESET, in both Core registers and EP context. The FIFO will need
      * to be reconfigured later by the driver API (typically through upper
      * reset handler */
-    if ((errcode = usbotghs_reset_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
-        goto err;
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        /* set TxFIFO for EP0 (in_eps[0]) */
+        log_printf("[USB HS][RESET] initialize EP0 TxFIFO in device mode\n");
+        if ((errcode = usbotghs_reset_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
+            goto err;
+        }
+    } else {
+        /* set TxFIFO for EP0 (out_eps[0]) */
+        log_printf("[USB HS][RESET] initialize EP0 TxFIFO in host mode\n");
+        if ((errcode = usbotghs_reset_epx_fifo(&(ctx->out_eps[0]))) != MBED_ERROR_NONE) {
+            goto err;
+        }
     }
 
+    log_printf("[USB HS][RESET] set EP0 as configured\n");
     /* Now EP0 is configued. Set this information in the driver context */
     ctx->in_eps[0].configured = true;
     ctx->out_eps[0].configured = true;
 
     /* execute upper layer (USB Control plane) reset handler. This
      * function should always reconfigure the FIFO structure */
+    log_printf("[USB HS][RESET] call usb ctrl plane reset\n");
     usbctrl_handle_reset(usb_otg_hs_dev_infos.id);
 
     /* now that USB full stack execution is done, Enable Endpoint.
      * From now on, data can be received or sent on Endpoint 0 */
-    set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
-            1, USBOTG_HS_DOEPCTL_EPENA);
+    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+        log_printf("[USB HS][RESET] enable EP0 out (reception)\n");
+        set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
+                1, USBOTG_HS_DOEPCTL_EPENA);
+    } else {
+        log_printf("[USB HS][RESET] host mode TODO\n");
+    }
 err:
     return errcode;
 }
@@ -528,12 +548,13 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_SETUP_TRANS_COMPLETE:
                 {
-                    log_printf("[USB HS][RXFLVL] EP0 Setup Transfer complete\n");
+                    log_printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
                     if (epnum != EP0 || bcnt != 0) {
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
                     }
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
+                    /* setup transfer complete, no wait oepint to handle this */
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP;
                     break;
                 }
                 case PKT_STATUS_SETUP_PKT_RECEIVED:
@@ -553,7 +574,7 @@ static mbed_error_t rxflvl_handler(void)
                     // TODO: read_fifo(setup_packet, bcnt, epnum);
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP;
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP_WIP;
                     break;
                 }
                 default:
@@ -569,6 +590,8 @@ static mbed_error_t rxflvl_handler(void)
     }
 err:
 	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
+    /* XXX; in dev mode only, should not be required */
+	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
     return errcode;
 }
 
@@ -677,7 +700,6 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
 	uint32_t intsts = sr;
 	uint32_t intmsk = dr;
 
-	log_printf("[USB HS] IRQ Handler\n");
 	if (intsts & USBOTG_HS_GINTSTS_CMOD_Msk){
 		log_printf("[USB HS] Int in Host mode !\n");
 	}
@@ -697,7 +719,10 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
             /* INFO: as log_printf is a *macro* only resolved by cpp in debug mode,
              * usbotghs_int_name is accedded only in this mode. There is no
              * invalid memory access in the other case. */
-            log_printf("[USB HS] IRQ Handler for event %d (%s)\n", i, usbotghs_int_name[i]);
+            if (i != 3) {
+                /* 3 is for SOF (Start Of Frame, and is too frequent, generating ISR exhausting */
+                log_printf("[USB HS] IRQ Handler for event %d (%s)\n", i, usbotghs_int_name[i]);
+            }
             usb_otg_hs_isr_handlers[i]();
         }
     }

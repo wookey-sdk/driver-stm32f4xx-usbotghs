@@ -172,6 +172,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
 #endif
     log_printf("[USB HS] core init: configure ULPI interractions\n");
 	reg_value = read_reg_value(r_CORTEX_M_USBOTG_HS_GUSBCFG);
+    log_printf("[USB HS] initial GUSBCFG is %x %x %x %x\n", reg_value >> 24, (reg_value >> 16) & 0xff, (reg_value >> 8) & 0xff, reg_value & 0xff);
 	/* Use the internal VBUS */
 	clear_reg_bits(&reg_value, USBOTG_HS_GUSBCFG_ULPIEVBUSD_Msk);
 	/* Data line pulsing using utmi_txvalid */
@@ -189,6 +190,8 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     /* writing back the global configuration register */
 	write_reg_value(r_CORTEX_M_USBOTG_HS_GUSBCFG, reg_value);
     log_printf("[USB HS] core init: GUSBCFG is %x %x %x %x\n", reg_value >> 24, (reg_value >> 16) & 0xff, (reg_value >> 8) & 0xff, reg_value & 0xff);
+	reg_value = read_reg_value(r_CORTEX_M_USBOTG_HS_GUSBCFG);
+    log_printf("[USB HS] core init: GUSBCFG reg after conf is %x %x %x %x\n", reg_value >> 24, (reg_value >> 16) & 0xff, (reg_value >> 8) & 0xff, reg_value & 0xff);
 
 	/* Core soft reset must be issued after PHY configuration */
 	/* Wait for AHB master idle */
@@ -249,6 +252,8 @@ mbed_error_t usbotghs_initialize_device(void)
 #else
     log_printf("[USB HS] dev init: Device mode without DMA support\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
+    /* XXX: this IT Mask shlould be unlock by USB reset... */
+    set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_NPTXFEM);
 #endif
 

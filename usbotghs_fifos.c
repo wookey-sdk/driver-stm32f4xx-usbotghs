@@ -208,7 +208,7 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
     }
     /* TODO: checking that EP is in correct direction before continuing */
     if (size == 0 || size > (ep->fifo_size - ep->fifo_idx)) {
-        log_printf("[USBOTG][HS] invalid or too big size: %d\n", size);
+        log_printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo_size, ep->fifo_idx);
         /* Why reading 0 bytes from Core FIFO ? */
         errcode = MBED_ERROR_INVPARAM;
         goto err;
@@ -345,6 +345,7 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+    log_printf("[USBOTG][HS] set ep %d TxFIFO to %p (size %d)\n", ep->id, src, size);
     /* set RAM FIFO for current EP. */
     ep->fifo = src;
     ep->fifo_idx = 0;

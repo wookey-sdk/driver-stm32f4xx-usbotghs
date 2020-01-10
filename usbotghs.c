@@ -128,15 +128,11 @@ mbed_error_t usbotghs_declare(void)
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.mode = 0; /* no binary inversion */
 
 
+    /* mask only for bits that are 'r', other bits of GINTSTS are rc_w1, handle by MASK PH */
     usbotghs_ctx.dev.irqs[0].posthook.action[3].instr = IRQ_PH_AND;
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.offset_dest = 0x18; /* MASK register offset */
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.offset_src = 0x14; /* MASK register offset */
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mask =
-                 USBOTG_HS_GINTMSK_USBRST_Msk   |
-                 USBOTG_HS_GINTMSK_ENUMDNEM_Msk |
-                 USBOTG_HS_GINTMSK_ESUSPM_Msk   |
-                 USBOTG_HS_GINTMSK_USBSUSPM_Msk |
-                 USBOTG_HS_GINTMSK_SOFM_Msk     |
                  USBOTG_HS_GINTMSK_OEPINT_Msk   |
                  USBOTG_HS_GINTMSK_IEPINT_Msk   |
                  USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
@@ -287,6 +283,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     if ((errcode = usbotghs_ulpi_reset()) != MBED_ERROR_NONE) {
         goto err;
     }
+    usbotghs_ctx.mode = mode;
     /* first, we need to initialize the core */
     log_printf("[USB HS] initialize the Core\n");
     if ((errcode = usbotghs_initialize_core(mode)) != MBED_ERROR_NONE) {
@@ -314,11 +311,12 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
             goto err;
             break;
     }
-    usbotghs_ctx.mode = mode;
 
     /* initialize EP0, which is both IN & OUT EP */
     usbotghs_ctx.in_eps[0].id = 0;
-    usbotghs_ctx.in_eps[0].configured = false; /* wait for reset */
+    usbotghs_ctx.in_eps[0].configured = true; /* wait for reset, but EP0 ctrl is ready to recv
+XXX: shouldn't it be false, without FIFO as RXFLVL should not be received before
+reset ? */
     usbotghs_ctx.in_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
     usbotghs_ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
@@ -328,7 +326,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
     usbotghs_ctx.in_eps[0].fifo_lck = false;
 
     usbotghs_ctx.out_eps[0].id = 0;
-    usbotghs_ctx.out_eps[0].configured = false; /* wait for reset */
+    usbotghs_ctx.out_eps[0].configured = true; /* wait for reset */
     usbotghs_ctx.out_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
     usbotghs_ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
@@ -360,6 +358,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
       ep = &ctx->in_eps[ep_id];
     }
     if (!ep->configured) {
+        log_printf("[USBOTG][HS] ep %d not configured\n", ep->id);
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
@@ -367,30 +366,26 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
      * Here, we have to split the src content, taking into account the
      * current EP mpsize, and schedule transmission into the Core TxFIFO.
      */
-    /* first set xmit fifo with given argument */
-    usbotghs_set_xmit_fifo(src, size, ep_id);
 
-    /* we loop while size is bigger than EPx Core TxFIFO size. Core TxFIFO size
-     * is bigger (or equal) to mpsize (ideally bigger), which means that we can
-     * transfer to the core TxFIFO size of the EP multiple mpsize packets
-     * and a potential residual short packet while the FIFO is not full.
-     * Yet, if we needs to consume more than the FIFO size, we need to
-     * repeat this operation multiple time by:
-     * 1. Set the transfert size (depending on the current FIFO free space) and the packet
-     *    count (equal to the number of mpsize packets + short packet that need to be
-     *    transfered
-     * 2. Fullfill the FIFO
-     * 3. Request a transmission of these packets
-     * 4. check the Status flag to be sure that data has been sent (or wait for
-     *    Endpoint diabled IT)
-     * 4. Loop again with the next offset of the input src buffer, while there is still
-     *    some data to send.
-     *
-     *    FIXME: BELOW TO REPLACE
-     */
-    for (; size >= ep->mpsize; size -= ep->mpsize) {
+    /* XXX: Here we assume fifo size == mpsize, which is bad..., fifo is bigger */
+    uint32_t residual_size = size;
+    uint32_t sent_data = 0;
+    /* while size is bigger than mpsize, write blocks to fifo */
+    while (residual_size > ep->mpsize) {
+        usbotghs_set_xmit_fifo(&(src[sent_data]), ep->mpsize, ep_id);
+        sent_data += ep->mpsize;
+
         /* Program the transfer size and packet count as follows:
          *      xfersize = N * maxpacket + short_packet pktcnt = N + (short_packet exist ? 1 : 0)
+         */
+        /* XXX: FIXME: transmission loop does not work. Should be upgraded by
+         * taking into account:
+         *   - input data size
+         *   - TxFIFO free size
+         *   - current EP MPSize (calculating packet count using currently written data
+         *     in FIFO / mpsize + potential residual)
+         *  We may need to write more than one time content in the FIFO (write loop)
+         *  as src input size may be bigger than the TxFIFO
          */
         packet_count = 0; //(size / ep->mpsize) + (size & ep->mpsize-1) ? 1 : 0);
 
@@ -431,6 +426,27 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         usbotghs_wait_for_xmit_complete(ep);
+    }
+
+    /* we loop while size is bigger than EPx Core TxFIFO size. Core TxFIFO size
+     * is bigger (or equal) to mpsize (ideally bigger), which means that we can
+     * transfer to the core TxFIFO size of the EP multiple mpsize packets
+     * and a potential residual short packet while the FIFO is not full.
+     * Yet, if we needs to consume more than the FIFO size, we need to
+     * repeat this operation multiple time by:
+     * 1. Set the transfert size (depending on the current FIFO free space) and the packet
+     *    count (equal to the number of mpsize packets + short packet that need to be
+     *    transfered
+     * 2. Fullfill the FIFO
+     * 3. Request a transmission of these packets
+     * 4. check the Status flag to be sure that data has been sent (or wait for
+     *    Endpoint diabled IT)
+     * 4. Loop again with the next offset of the input src buffer, while there is still
+     *    some data to send.
+     *
+     *    FIXME: BELOW TO REPLACE
+     */
+    for (; size >= ep->mpsize; size -= ep->mpsize) {
 
     }
     /* residual */
