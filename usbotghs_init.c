@@ -32,6 +32,8 @@
 
 #include "usbotghs_init.h"
 
+#define TRIGGER_TXFE_ON_HALF_EMPTY 0
+#define TRIGGER_TXFE_ON_FULL_EMPTY 1
 
 /*
  * Core initialization after Power-On. This configuration must
@@ -135,11 +137,16 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0, USBOTG_HS_GAHBCFG_GINTMSK);
     /* non-periodic TxFIFO empty level (host mode or device with SFO mode) */
     if (mode == USBOTGHS_MODE_HOST) {
-        /* non-periodic TxFIFO empty level rise an interrupt when half empty */
-        set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0, USBOTG_HS_GAHBCFG_TXFELVL);
         /* periodic TxFIFO empty level rise an interrupt when half empty */
         set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 0, USBOTG_HS_GAHBCFG_PTXFELVL);
     }
+    /* both Host & Device mode, TXFE rise on TxFIFO completely empty */
+    /* non-periodic TxFIFO empty level rise an interrupt when *full* empty */
+#ifdef CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
+    set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, TRIGGER_TXFE_ON_HALF_EMPTY, USBOTG_HS_GAHBCFG_TXFELVL);
+#else
+    set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, TRIGGER_TXFE_ON_FULL_EMPTY, USBOTG_HS_GAHBCFG_TXFELVL);
+#endif
 
 	/* Wait for master AHB automaton to be in IDLE state */
     log_printf("[USB HS] core init: clear PWRDWN\n");

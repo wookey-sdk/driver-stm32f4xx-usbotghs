@@ -22,6 +22,14 @@ config USR_DEV_USBOTGHS_DMA
   ---help---
   Activate DMA-based memory copy between device and RAM FIFOs
 
+config USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
+  bool "Trigger application when TxFIFO is half empty"
+  default n
+  ---help---
+  Inform the driver that the TxFIFO is half empty, this permit to
+  paralelize data copy to FIFO and USB transmition, using two FIFO
+  stage in the same time.
+  This reduce the amount of TxFIFO that can be used in one time.
 
 endmenu
 

@@ -58,9 +58,21 @@
 /* wait while the iepint (or oepint in host mode) clear the DATA_OUT state */
 static void usbotghs_wait_for_xmit_complete(usbotghs_ep_t *ep)
 {
+#if CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
+    /* wait for iepint interrupt & DIEPINTx TXFE flag set, specifying that
+     * the TxFIFO is half empty
+     */
+    do {
+        ;
+    } while (ep->state != USBOTG_HS_EP_STATE_DATA);
+#else
+    /* wait for iepint interrupt & DIEPINTx TXFC flag set, specifying that
+     * the TxFIFO is half empty
+     */
     do {
         ;
     } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
+#endif
     return;
 }
 
@@ -324,6 +336,9 @@ reset ? */
     usbotghs_ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
     usbotghs_ctx.in_eps[0].fifo_size = 0; /* not yet configured */
     usbotghs_ctx.in_eps[0].fifo_lck = false;
+    if (mode == USBOTGHS_MODE_DEVICE) {
+        usbotghs_ctx.in_eps[0].core_txfifo_empty = true;
+    }
 
     usbotghs_ctx.out_eps[0].id = 0;
     usbotghs_ctx.out_eps[0].configured = true; /* wait for reset */
@@ -348,7 +363,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 {
     uint32_t packet_count = 0;
     mbed_error_t errcode = MBED_ERROR_NONE;
-
+    uint32_t fifo_size = 0;
     usbotghs_context_t *ctx = usbotghs_get_context();
     usbotghs_ep_t *ep = NULL;
 
@@ -362,6 +377,22 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+    if (ep->core_txfifo_empty == true) {
+#ifdef CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
+        /* at least 1/2 FIFO size. Effective free FIFO size is read from
+         * DTXFSTSx register. Size is in words */
+
+        fifo_size = read_reg_value(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id) & 0xffff) * 4;
+#else
+        /* Well... TxFIFO is completely free */
+        fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
+#endif
+    } else {
+        /* we must get back the effective free size, has TxFIFO is *not*
+         * at least Half empty... */
+        fifo_size = (((uint32_t)read_reg_value(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id)) & (uint32_t)0xffff)) * 4;
+    }
+
     /*
      * Here, we have to split the src content, taking into account the
      * current EP mpsize, and schedule transmission into the Core TxFIFO.
@@ -371,15 +402,15 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     uint32_t residual_size = size;
     uint32_t sent_data = 0;
     /* while size is bigger than the TxFIFO size, we must loop on FIFO size write */
-    while (residual_size > USBOTG_HS_TX_CORE_FIFO_SZ) {
+    while (residual_size > fifo_size) {
 
         /*
          * Now, for each TxFIFO, write, we must calculate the number of packet that need to be sent.
          * The number of packet is equal to:
          * size_written_in_fifo / ep->mpsize (+ 1 residual packet if the division has a carry)
          */
-        packet_count = (USBOTG_HS_TX_CORE_FIFO_SZ / ep->mpsize) + ((USBOTG_HS_TX_CORE_FIFO_SZ % ep->mpsize) ? 1: 0);
-        usbotghs_set_xmit_fifo(&(src[sent_data]), USBOTG_HS_TX_CORE_FIFO_SZ, ep_id);
+        packet_count = (fifo_size / ep->mpsize) + ((fifo_size % ep->mpsize) ? 1: 0);
+        usbotghs_set_xmit_fifo(&(src[sent_data]), fifo_size, ep_id);
 
         /*
          * Now configure the core to handle the current TxFIFO content
@@ -393,7 +424,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                       USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
 
             set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                    USBOTG_HS_TX_CORE_FIFO_SZ,
+                    fifo_size,
                     USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
                     USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
             /* 2. Enable endpoint for transmission. */
@@ -408,7 +439,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                       USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
 
             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                    USBOTG_HS_TX_CORE_FIFO_SZ,
+                    fifo_size,
                     USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
                     USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
             /* 2. Enable endpoint for transmission. */
@@ -417,13 +448,13 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         }
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
-        usbotghs_write_epx_fifo(USBOTG_HS_TX_CORE_FIFO_SZ, ep);
+        usbotghs_write_epx_fifo(fifo_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         usbotghs_wait_for_xmit_complete(ep);
 
-        sent_data += USBOTG_HS_TX_CORE_FIFO_SZ;
-        residual_size -= USBOTG_HS_TX_CORE_FIFO_SZ;
+        sent_data += fifo_size;
+        residual_size -= fifo_size;
     }
     /* Now, handle potential non-NULL residual size */
     if (residual_size != 0) {
@@ -474,7 +505,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         }
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
-        usbotghs_write_epx_fifo(USBOTG_HS_TX_CORE_FIFO_SZ, ep);
+        usbotghs_write_epx_fifo(fifo_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         usbotghs_wait_for_xmit_complete(ep);

@@ -386,22 +386,42 @@ static mbed_error_t iepint_handler(void)
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
     uint16_t daint = 0;
+    uint32_t diepintx = 0;
     /* get EPx on which the event came */
     daint = (uint16_t)(read_reg_value(r_CORTEX_M_USBOTG_HS_DAINT) & 0xff);
     /* checking current mode */
     if (ctx->mode == USBOTGHS_MODE_DEVICE) {
-        /* here, this is a 'end of transmission' interrupt. Let's handle each
-         * endpoint for which the interrupt rised */
+        /*
+         * An event rose for one or more IN EPs.
+         * First, for each EP, we handle driver level events (NAK, errors, etc.)
+         * if there is upper layer that need to be executed, we handle it.
+         */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
         for (uint8_t i = 0; i < 16; ++i) {
             if (daint & val) {
                 /* an iepint for this EP is active */
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
+                /*
+                 * Get back DIEPINTx for this EP
+                 */
+                diepintx = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
+                /* handle various events of the current IN EP */
+                /* TxFIFO (half) empty ? */
+                if (diepintx & USBOTG_HS_DIEPINT_TXFE_Msk) {
+                    /* set TxFIFO has (half) empty */
+                    ctx->in_eps[ep_id].core_txfifo_empty = true;
+                }
+                /* transmission terminated ? */
+                if (diepintx & USBOTG_HS_DIEPINT_XFRC_Msk) {
+                    errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                    ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                }
+                /* TODO: status & error flags (overrun, NAK... */
+
+
                 /* now that transmit is complete, set ep state as IDLE */
                 /* calling upper handler, transmitted size read from DIEPSTS */
-                errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
-                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
             val = val << 1;
@@ -660,7 +680,7 @@ static const usb_otg_hs_isr_handler_t usb_otg_hs_isr_handlers[32] = {
     otg_handler,        /*< OTG interrupt */
     sof_handler,        /*< Start of Frame */
     rxflvl_handler,     /*< RxFifo non-empty */
-    default_handler,    /*< Non-periodic TxFIFO empty (Host mode) */
+    default_handler,    /*< Non-periodic TxFIFO empty */
     default_handler,    /*< Global IN NAK effective */
     default_handler,    /*< Global OUT NAK effective*/
     reserved_handler,   /*< Reserved */

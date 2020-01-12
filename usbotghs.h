@@ -75,6 +75,7 @@ typedef struct {
     volatile uint32_t            fifo_idx;     /* current FIFO index  (recv) */
     volatile uint32_t            fifo_size;    /* associated RAM FIFO max size (recv) */
     volatile bool                fifo_lck;     /* DMA, locking mechanism (recv) */
+    volatile bool                core_txfifo_empty; /* core TxFIFO (Half) empty */
 } usbotghs_ep_t;
 
 #define USBOTGHS_MAX_IN_EP   8
