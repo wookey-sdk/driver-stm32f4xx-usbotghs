@@ -28,16 +28,11 @@
 
 #include "api/libusbotghs.h"
 #include "usbotghs_regs.h"
+#include "usbotghs_fifos.h"
 #include "usbotghs.h"
 
 #include "generated/usb_otg_hs.h"
 #include "usbotghs_handler.h"
-
-/*
- * Size of the USB OTG HS core internal FIFO (global config, not per EP)
- */
-#define USBOTG_HS_RX_CORE_FIFO_SZ 0x80 /* 128 bytes, unit is 32bits DWORD here */
-#define USBOTG_HS_TX_CORE_FIFO_SZ 0x80 /* 128 bytes, unit is 32bits DWORD here */
 
 static inline void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep)
 {

@@ -30,6 +30,14 @@
 #include "api/libusbotghs.h"
 #include "usbotghs.h"
 
+/*
+ * Size of the USB OTG HS core internal FIFO (global config, not per EP)
+ */
+#define USBOTG_HS_RX_CORE_FIFO_SZ 0x80 /* 128 bytes, unit is 32bits DWORD here */
+#define USBOTG_HS_TX_CORE_FIFO_SZ 0x80 /* 128 bytes, unit is 32bits DWORD here */
+
+
+
 mbed_error_t usbotghs_init_global_fifo(void);
 
 mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep);
