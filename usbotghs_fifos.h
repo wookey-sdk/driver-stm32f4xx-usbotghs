@@ -54,4 +54,6 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
 
 mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid);
 
+void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep);
+
 #endif/*!USBOTGHS_FIFOS_H_*/

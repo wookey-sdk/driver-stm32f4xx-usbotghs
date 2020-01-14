@@ -235,6 +235,8 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
                  USBOTG_HS_GINTMSK_OTGINT_Msk | USBOTG_HS_GINTMSK_MMISM_Msk);
 
+    log_printf("[USB HS] core init: clear SOF (soft reset case)\n");
+	clear_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_SOFM_Msk);
     /*
      * 6. not needed here.
      */
@@ -259,9 +261,11 @@ mbed_error_t usbotghs_initialize_device(void)
 #else
     log_printf("[USB HS] dev init: Device mode without DMA support\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_NPTXFEM);
+#if 0
     /* XXX: this IT Mask shlould be unlock by USB reset... */
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
-    set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_NPTXFEM);
+#endif
 #endif
 
 
@@ -313,8 +317,7 @@ mbed_error_t usbotghs_initialize_device(void)
         		 USBOTG_HS_GINTMSK_USBRST_Msk   |
                  USBOTG_HS_GINTMSK_ENUMDNEM_Msk |
                  USBOTG_HS_GINTMSK_ESUSPM_Msk   |
-                 USBOTG_HS_GINTMSK_USBSUSPM_Msk |
-                 USBOTG_HS_GINTMSK_SOFM_Msk);
+                 USBOTG_HS_GINTMSK_USBSUSPM_Msk);
 
     log_printf("[USB HS] dev init: unmask the global interrupt msk\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 1, USBOTG_HS_GAHBCFG_GINTMSK);

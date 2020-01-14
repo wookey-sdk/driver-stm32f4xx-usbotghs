@@ -34,7 +34,7 @@
 #include "generated/usb_otg_hs.h"
 #include "usbotghs_handler.h"
 
-static inline void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep)
+void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep)
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /*
@@ -84,6 +84,9 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile uint
 #else
 	uint32_t size_4bytes = size / 4;
     uint32_t tmp = 0;
+    if (!src || size == 0) {
+        return;
+    }
     // IP should has its own interrupts disable during ISR execution
     uint32_t oldmask = read_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK);
     /* mask interrupts while writting Core FIFO */
@@ -180,6 +183,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
     ep->fifo = NULL;
     ep->fifo_lck = false;
     ep->fifo_size = 0;
+    ep->core_txfifo_empty = true;
     return MBED_ERROR_NONE;
 }
 
@@ -202,7 +206,7 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     /* TODO: checking that EP is in correct direction before continuing */
-    if (size == 0 || size > (ep->fifo_size - ep->fifo_idx)) {
+    if (size == 0 || size > (ep->fifo_size)) {
         log_printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo_size, ep->fifo_idx);
         /* Why reading 0 bytes from Core FIFO ? */
         errcode = MBED_ERROR_INVPARAM;
@@ -240,7 +244,8 @@ mbed_error_t usbotghs_write_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* sanitation */
     /* we consider that packet splitting is made by the caller (i.e. usbotghs_send()) */
-    if (size > ep->mpsize) {
+    /* fixme: size > (USBOTG_HS_TX_CORE_FIFO_SZ - ep->fifo_idx) */
+    if (size > USBOTG_HS_TX_CORE_FIFO_SZ) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
@@ -324,11 +329,11 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
     mbed_error_t        errcode = MBED_ERROR_NONE;
 
     if (ctx->mode == USBOTGHS_MODE_DEVICE) {
-        /* reception is done ON out_eps in device mode */
-        ep = &(ctx->out_eps[epid]);
-    } else {
-        /* reception is done IN out_eps in device mode */
+        /* transmition is done using in_eps in device mode */
         ep = &(ctx->in_eps[epid]);
+    } else {
+        /* transmition is done using out_eps in device mode */
+        ep = &(ctx->out_eps[epid]);
     }
     if (!ep->configured) {
         errcode = MBED_ERROR_INVPARAM;

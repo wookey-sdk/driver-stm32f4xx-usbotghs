@@ -64,7 +64,7 @@ static void usbotghs_wait_for_xmit_complete(usbotghs_ep_t *ep)
      */
     do {
         ;
-    } while (ep->state != USBOTG_HS_EP_STATE_DATA);
+    } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
 #else
     /* wait for iepint interrupt & DIEPINTx TXFC flag set, specifying that
      * the TxFIFO is half empty
@@ -377,12 +377,14 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+    // FIXME
+#if 0
     if (ep->core_txfifo_empty == true) {
 #ifdef CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
         /* at least 1/2 FIFO size. Effective free FIFO size is read from
          * DTXFSTSx register. Size is in words */
 
-        fifo_size = read_reg_value(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id) & 0xffff) * 4;
+        fifo_size = (read_reg_value(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id)) & 0xffff) * 4;
 #else
         /* Well... TxFIFO is completely free */
         fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
@@ -392,6 +394,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
          * at least Half empty... */
         fifo_size = (((uint32_t)read_reg_value(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id)) & (uint32_t)0xffff)) * 4;
     }
+#else
+    fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
+#endif
 
     /*
      * Here, we have to split the src content, taking into account the
@@ -404,13 +409,30 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /* while size is bigger than the TxFIFO size, we must loop on FIFO size write */
     while (residual_size > fifo_size) {
 
+        packet_count = (fifo_size / ep->mpsize) + ((fifo_size % ep->mpsize) ? 1: 0);
+
+        /* wait while there is enough space in TxFIFO */
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < fifo_size / 4){
+            /* Are we suspended? */
+            if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
+                log_printf("[USBOTG][HS] Suspended!\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        }
+
+
         /*
          * Now, for each TxFIFO, write, we must calculate the number of packet that need to be sent.
          * The number of packet is equal to:
          * size_written_in_fifo / ep->mpsize (+ 1 residual packet if the division has a carry)
          */
-        packet_count = (fifo_size / ep->mpsize) + ((fifo_size % ep->mpsize) ? 1: 0);
-        usbotghs_set_xmit_fifo(&(src[sent_data]), fifo_size, ep_id);
+        if ((errcode = usbotghs_set_xmit_fifo(&(src[sent_data]), fifo_size, ep_id)) != MBED_ERROR_NONE) {
+            log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
+            goto err;
+        }
+        uint32_t oldmask = read_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK);
+        set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, 0xffffffff, 0);
 
         /*
          * Now configure the core to handle the current TxFIFO content
@@ -451,18 +473,35 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         usbotghs_write_epx_fifo(fifo_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
-        usbotghs_wait_for_xmit_complete(ep);
+        //usbotghs_wait_for_xmit_complete(ep);
 
         sent_data += fifo_size;
         residual_size -= fifo_size;
+        set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, oldmask, 0xffffffff, 0);
     }
     /* Now, handle potential non-NULL residual size */
-    if (residual_size != 0) {
+    if (residual_size > 0) {
         /*
          * Again, we must calculate the number of packet that need to be sent.
          * The number of packet is equal to:
          * size_written_in_fifo / ep->mpsize (+ 1 residual packet if the division has a carry)
          */
+
+        /* wait while there is enough space in TxFIFO */
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) <
+                (residual_size / 4 + (residual_size & 3 ? 1 : 0))) {
+            /* Are we suspended? */
+            if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
+                log_printf("[USBOTG][HS] Suspended!\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        }
+
+        uint32_t oldmask = read_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK);
+        set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, 0xffffffff, 0);
+
+
         if (residual_size > ep->mpsize) {
             packet_count = (residual_size / ep->mpsize) + ((residual_size % ep->mpsize) ? 1: 0);
         } else {
@@ -508,10 +547,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         usbotghs_write_epx_fifo(fifo_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
-        usbotghs_wait_for_xmit_complete(ep);
+        //usbotghs_wait_for_xmit_complete(ep);
 
         sent_data += residual_size;
         residual_size = 0;
+        set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, oldmask, 0xffffffff, 0);
     }
 err:
     return errcode;
@@ -570,7 +610,7 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
     }
     /* wait for XMIT data to be transfered (wait for iepint (or oepint in
      * host mode) to set the EP in correct state */
-    usbotghs_wait_for_xmit_complete(ep);
+    //usbotghs_wait_for_xmit_complete(ep);
 err:
     return errcode;
 }

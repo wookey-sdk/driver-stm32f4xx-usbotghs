@@ -143,6 +143,12 @@ static const char *usbotghs_int_name[] = {
     "SRQINT",
     "WKUPINT",
 };
+
+static volatile uint32_t    usbotghs_int_cnt[] = { 0 };
+
+
+
+
 #endif
 /*
  * Generic handler, used by default.
@@ -346,14 +352,26 @@ static mbed_error_t oepint_handler(void)
             if (daint & val) {
                 printf("[USBOTG][HS] received data on ep %x\n", ep_id);
                 /* calling upper handler */
+                uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
+                set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
+
                 errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
+                    if (ep_id != 0) {
+                        /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                    }
+                }
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
             val = val << 1;
         }
+        set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
     } else {
-        /* here, this is a 'end of transmission' interrupt. Let's handle each
+        /* TODO: (FIXME host mode not working yet) here, this is a 'end of transmission' interrupt. Let's handle each
          * endpoint for which the interrupt rised */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
@@ -406,19 +424,106 @@ static mbed_error_t iepint_handler(void)
                  * Get back DIEPINTx for this EP
                  */
                 diepintx = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
+
+                if (ep_id == 0) {
+                    uint32_t diepint0 = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
+                    /* Bit 7 TXFE: Transmit FIFO empty */
+                    if (diepint0 & USBOTG_HS_DIEPINT_TOC_Msk) {
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
+                        ctx->in_eps[ep_id].core_txfifo_empty = true;
+                        ctx->in_eps[ep_id].fifo_idx = 0;
+                        ctx->in_eps[ep_id].fifo_lck = false;
+                    }
+
+                    /* Bit 6 INEPNE: IN endpoint NAK effective */
+                    if (diepint0 & USBOTG_HS_DIEPINT_INEPNE_Msk) {
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_INEPNE_Msk);
+                    }
+
+                    /* Bit 4 ITTXFE: IN token received when TxFIFO is empty */
+                    if (diepint0 & USBOTG_HS_DIEPINT_ITTXFE_Msk) {
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
+                    }
+
+                    /* Bit 3 TOC: Timeout condition */
+                    if (diepint0 & USBOTG_HS_DIEPINT_TOC_Msk) {
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TOC_Msk);
+                    }
+
+                    /* bit 1 EPDISD: Endpoint disabled interrupt */
+                    if (diepint0 & USBOTG_HS_DIEPINT_EPDISD_Msk) {
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
+                        /* Now the endpiont is really disabled
+                         * We should update enpoint status
+                         */
+                    }
+
+                    /* Bit 0 XFRC: Transfer completed interrupt */
+                    if (diepint0 & USBOTG_HS_DIEPINT_XFRC_Msk) {
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
+                        ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                        /* Our callback */
+                    }
+                } else {
+                    if (daint & ep_id) {
+                        uint32_t diepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
+
+                        /* Bit 7 TXFE: Transmit FIFO empty */
+                        if (diepint & USBOTG_HS_DIEPINT_TOC_Msk) {
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
+                            ctx->in_eps[ep_id].core_txfifo_empty = true;
+                        }
+
+                        /* Bit 6 INEPNE: IN endpoint NAK effective */
+                        if (diepint & USBOTG_HS_DIEPINT_INEPNE_Msk) {
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_INEPNE_Msk);
+                        }
+
+                        /* Bit 4 ITTXFE: IN token received when TxFIFO is empty */
+                        if (diepint & USBOTG_HS_DIEPINT_ITTXFE_Msk) {
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
+                        }
+
+                        /* Bit 3 TOC: Timeout condition */
+                        if (diepint & USBOTG_HS_DIEPINT_TOC_Msk) {
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TOC_Msk);
+                        }
+
+                        /* bit 1 EP2DISD: Endpoint disabled interrupt */
+                        if (diepint & USBOTG_HS_DIEPINT_EPDISD_Msk) {
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
+                        }
+
+                        /* Bit 2 XFRC: Transfer completed interrupt */
+                        if (diepint & USBOTG_HS_DIEPINT_XFRC_Msk) {
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
+                            ctx->in_eps[ep_id].fifo_idx = 0;
+                            ctx->in_eps[ep_id].fifo_lck = false;
+                            ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                            /* Our callback */
+                        }
+
+                    }
+                }
+
+#if 0
                 /* handle various events of the current IN EP */
                 /* TxFIFO (half) empty ? */
                 if (diepintx & USBOTG_HS_DIEPINT_TXFE_Msk) {
                     /* set TxFIFO has (half) empty */
                     ctx->in_eps[ep_id].core_txfifo_empty = true;
+#if CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
+                    ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_OUT
+#endif
                 }
                 /* transmission terminated ? */
                 if (diepintx & USBOTG_HS_DIEPINT_XFRC_Msk) {
                     errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                    ctx->in_eps[ep_id].core_txfifo_empty = true;
                     ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                 }
                 /* TODO: status & error flags (overrun, NAK... */
-
+#endif
 
                 /* now that transmit is complete, set ep state as IDLE */
                 /* calling upper handler, transmitted size read from DIEPSTS */
@@ -426,8 +531,9 @@ static mbed_error_t iepint_handler(void)
             ep_id++;
             val = val << 1;
         }
+        set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
     } else {
-        /* here, this is a 'data received' interrupt */
+        /* here, this is a 'data received' interrupt  (Host mode) */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
         for (uint8_t i = 0; i < 16; ++i) {
@@ -524,6 +630,13 @@ static mbed_error_t rxflvl_handler(void)
                         ctx->out_eps[epnum].state != USBOTG_HS_EP_STATE_DATA_OUT)
                     {
                         log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP %d!\n", epnum);
+                        /* to clear RXFLVL IT, we must read from FIFO. read to garbage here */
+                        uint8_t buf[16];
+                        for (; bcnt > 16; bcnt -= 16) {
+                            usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                        }
+                        usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
@@ -531,21 +644,6 @@ static mbed_error_t rxflvl_handler(void)
 #ifndef CONFIG_USR_DEV_USBOTGHS_DMA
                     usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN;
-# if 0
-                    Why this ? Why not let oepint being executed when the copy is finished ?
-                    In the new driver, fifo is not reset, but flagged, to avoid setting
-                    again and again a new address even when not needed.
-                    /* FIXME mkproper  In case of EP0, we have to manually check the completion and call the callback */
-                    // Really ? its OEPINT which should handle this !
-                    }
-                    if (epnum == EP0) {
-                        if (buffer_ep0_idx == buffer_ep0_size) {
-                            buffer_ep0 = NULL;
-                            usb_hs_callbacks.data_received_callback(buffer_ep0_idx);
-                            buffer_ep0_idx = buffer_ep0_size = 0;
-                        }
-                    }
-# endif
 #else
                     /* XXX: in case of DMA mode activated, the RAM FIFO recopy should be
                      * handled by the Core itself, and OEPINT executed automatically... */
@@ -581,6 +679,13 @@ static mbed_error_t rxflvl_handler(void)
                 {
                     log_printf("[USB HS][RXFLVL] EP0 Setup pkt receive\n");
                     if (epnum != EP0 || dpid != DATA_PID_DATA0) {
+
+                        uint8_t buf[16];
+                        for (; bcnt > 16; bcnt -= 16) {
+                            usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                        }
+                        usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
                     }
@@ -611,7 +716,7 @@ static mbed_error_t rxflvl_handler(void)
 err:
 	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
     /* XXX; in dev mode only, should not be required */
-	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
+	//set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
     return errcode;
 }
 
@@ -736,6 +841,9 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
          */
         if (val & 1)
         {
+#if CONFIG_USR_DRV_USBOTGHS_DEBUG
+            usbotghs_int_cnt[i]++;
+#endif
             /* INFO: as log_printf is a *macro* only resolved by cpp in debug mode,
              * usbotghs_int_name is accedded only in this mode. There is no
              * invalid memory access in the other case. */
