@@ -261,7 +261,7 @@ mbed_error_t usbotghs_initialize_device(void)
 #else
     log_printf("[USB HS] dev init: Device mode without DMA support\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
-    set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_NPTXFEM);
+//XXX:    set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_NPTXFEM);
 #if 0
     /* XXX: this IT Mask shlould be unlock by USB reset... */
     set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);

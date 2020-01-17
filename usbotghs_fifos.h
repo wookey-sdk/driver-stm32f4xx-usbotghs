@@ -56,4 +56,14 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid);
 
 void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile uint32_t size, uint8_t ep);
 
+/* flush the Core TxFIFO of the given EP. This functions does *not* upate the
+ * associated EP ctx (fifo_idx, fifo_size) */
+mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id);
+
+/* flush the Core TxFIFO of all the IN (Tx in device mode) EP.
+ * This functions does *not* upate the associated EP ctx (fifo_idx, fifo_size) */
+mbed_error_t usbotghs_txfifo_flush_all(void);
+
+mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id);
+
 #endif/*!USBOTGHS_FIFOS_H_*/

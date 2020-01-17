@@ -104,6 +104,8 @@ typedef enum {
 
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
+
+static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
 /* This table is made only as a debug helper, in order to assicate the
  * interrupt identifier with a full-text name for pretty printing.
  * This consume space in the device flash memory and should be used only
@@ -143,9 +145,6 @@ static const char *usbotghs_int_name[] = {
     "SRQINT",
     "WKUPINT",
 };
-
-static volatile uint32_t    usbotghs_int_cnt[] = { 0 };
-
 
 
 
@@ -264,6 +263,9 @@ static mbed_error_t reset_handler(void)
             goto err;
         }
     }
+    /* flushing FIFOs */
+    usbotghs_txfifo_flush(0);
+    usbotghs_rxfifo_flush(0);
 
     log_printf("[USB HS][RESET] set EP0 as configured\n");
     /* Now EP0 is configued. Set this information in the driver context */
@@ -314,8 +316,11 @@ static mbed_error_t enumdone_handler(void)
 #if CONFIG_USR_DEV_USBOTGHS_DMA
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(0), USBOTG_HS_DOEPCTLx_EPENA_Msk);
 #endif
+#if 0
+// XXX: still SOF IT burst to resolve...
 	set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK,
         		 USBOTG_HS_GINTMSK_SOFM_Msk);
+#endif
 
     /* XXX: by now, no upper trigger on 'ENUMERATION DONE' event.
      * This event is received after the USB reset event when full USB
@@ -354,16 +359,22 @@ static mbed_error_t oepint_handler(void)
                 /* calling upper handler */
                 uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
                 set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
-
-                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
+                    errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                }
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
-                    if (ep_id != 0) {
                         /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
+#if 0
+                    if (ep_id != 0) {
                         set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
                         set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                     }
+#endif
                 }
+                /* now that data has been handled, consider FIFO as empty */
+                ctx->out_eps[ep_id].fifo_idx = 0;
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
@@ -425,85 +436,54 @@ static mbed_error_t iepint_handler(void)
                  */
                 diepintx = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
 
-                if (ep_id == 0) {
-                    uint32_t diepint0 = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
-                    /* Bit 7 TXFE: Transmit FIFO empty */
-                    if (diepint0 & USBOTG_HS_DIEPINT_TOC_Msk) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
-                        ctx->in_eps[ep_id].core_txfifo_empty = true;
-                        ctx->in_eps[ep_id].fifo_idx = 0;
-                        ctx->in_eps[ep_id].fifo_lck = false;
-                    }
+                /* Bit 7 TXFE: Transmit FIFO empty */
+                if (diepintx & USBOTG_HS_DIEPINT_TOC_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
+                    ctx->in_eps[ep_id].core_txfifo_empty = true;
+                    ctx->in_eps[ep_id].fifo_idx = 0;
+                    log_printf("[USBOTG][HS] iepint: ep %d: TxFifo empty\n", ep_id);
+                }
 
-                    /* Bit 6 INEPNE: IN endpoint NAK effective */
-                    if (diepint0 & USBOTG_HS_DIEPINT_INEPNE_Msk) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_INEPNE_Msk);
-                    }
+                /* Bit 6 INEPNE: IN endpoint NAK effective */
+                if (diepintx & USBOTG_HS_DIEPINT_INEPNE_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_INEPNE_Msk);
+                    log_printf("[USBOTG][HS] iepint: ep %d: NAK effective\n", ep_id);
+                }
 
-                    /* Bit 4 ITTXFE: IN token received when TxFIFO is empty */
-                    if (diepint0 & USBOTG_HS_DIEPINT_ITTXFE_Msk) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
-                    }
+                /* Bit 4 ITTXFE: IN token received when TxFIFO is empty */
+                if (diepintx & USBOTG_HS_DIEPINT_ITTXFE_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
+                    log_printf("[USBOTG][HS] iepint: ep %d: token rcv when fifo empty\n", ep_id);
+                }
 
-                    /* Bit 3 TOC: Timeout condition */
-                    if (diepint0 & USBOTG_HS_DIEPINT_TOC_Msk) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TOC_Msk);
-                    }
+                /* Bit 3 TOC: Timeout condition */
+                if (diepintx & USBOTG_HS_DIEPINT_TOC_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TOC_Msk);
+                    log_printf("[USBOTG][HS] iepint: ep %d: timeout cond\n", ep_id);
+                }
 
-                    /* bit 1 EPDISD: Endpoint disabled interrupt */
-                    if (diepint0 & USBOTG_HS_DIEPINT_EPDISD_Msk) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
-                        /* Now the endpiont is really disabled
-                         * We should update enpoint status
-                         */
-                    }
+                /* bit 1 EPDISD: Endpoint disabled interrupt */
+                if (diepintx & USBOTG_HS_DIEPINT_EPDISD_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
+                    log_printf("[USBOTG][HS] iepint: ep %d: EP disabled\n", ep_id);
+                    /* Now the endpiont is really disabled
+                     * We should update enpoint status
+                     */
+                }
 
-                    /* Bit 0 XFRC: Transfer completed interrupt */
-                    if (diepint0 & USBOTG_HS_DIEPINT_XFRC_Msk) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
-                        ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
-                        /* Our callback */
-                    }
-                } else {
-                    if (daint & ep_id) {
-                        uint32_t diepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
+                /* Bit 0 XFRC: Transfer completed interrupt */
+                if (diepintx & USBOTG_HS_DIEPINT_XFRC_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
 
-                        /* Bit 7 TXFE: Transmit FIFO empty */
-                        if (diepint & USBOTG_HS_DIEPINT_TOC_Msk) {
-                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
-                            ctx->in_eps[ep_id].core_txfifo_empty = true;
-                        }
+                    log_printf("[USBOTG][HS] iepint: ep %d: transfert completed\n", ep_id);
 
-                        /* Bit 6 INEPNE: IN endpoint NAK effective */
-                        if (diepint & USBOTG_HS_DIEPINT_INEPNE_Msk) {
-                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_INEPNE_Msk);
-                        }
-
-                        /* Bit 4 ITTXFE: IN token received when TxFIFO is empty */
-                        if (diepint & USBOTG_HS_DIEPINT_ITTXFE_Msk) {
-                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
-                        }
-
-                        /* Bit 3 TOC: Timeout condition */
-                        if (diepint & USBOTG_HS_DIEPINT_TOC_Msk) {
-                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TOC_Msk);
-                        }
-
-                        /* bit 1 EP2DISD: Endpoint disabled interrupt */
-                        if (diepint & USBOTG_HS_DIEPINT_EPDISD_Msk) {
-                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
-                        }
-
-                        /* Bit 2 XFRC: Transfer completed interrupt */
-                        if (diepint & USBOTG_HS_DIEPINT_XFRC_Msk) {
-                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
-                            ctx->in_eps[ep_id].fifo_idx = 0;
-                            ctx->in_eps[ep_id].fifo_lck = false;
-                            ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
-                            /* Our callback */
-                        }
-
-                    }
+                    /* now EP is idle */
+                    ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                    /* inform libctrl of transfert complete */
+                    errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                    /* clear current FIFO, now that content is sent */
+                    ctx->in_eps[ep_id].fifo = 0;
+                    ctx->in_eps[ep_id].fifo_idx = 0;
                 }
 
 #if 0
@@ -516,15 +496,7 @@ static mbed_error_t iepint_handler(void)
                     ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_OUT
 #endif
                 }
-                /* transmission terminated ? */
-                if (diepintx & USBOTG_HS_DIEPINT_XFRC_Msk) {
-                    errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
-                    ctx->in_eps[ep_id].core_txfifo_empty = true;
-                    ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
-                }
-                /* TODO: status & error flags (overrun, NAK... */
 #endif
-
                 /* now that transmit is complete, set ep state as IDLE */
                 /* calling upper handler, transmitted size read from DIEPSTS */
             }
@@ -548,7 +520,7 @@ static mbed_error_t iepint_handler(void)
             val = val << 1;
         }
     }
-    /* calling upper handler */
+    /* calling upper handler... needed ? */
     return errcode;
 }
 
@@ -567,15 +539,17 @@ static mbed_error_t rxflvl_handler(void)
 	uint32_t size;
     usbotghs_context_t *ctx;
 
-    ctx = usbotghs_get_context();
 
-   	/* 2. Mask the RXFLVL interrupt (in OTG_HS_GINTSTS) by writing to RXFLVL = 0
+   	/* 1. Mask the RXFLVL interrupt (in OTG_HS_GINTSTS) by writing to RXFLVL = 0
      * (in OTG_HS_GINTMSK),  until it has read the packet from the receive FIFO
      */
 	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, USBOTG_HS_GINTMSK_RXFLVLM);
 
- 	/* 1. Read the Receive status pop register */
+ 	/* 2. Read the Receive status pop register */
     grxstsp = read_reg_value(r_CORTEX_M_USBOTG_HS_GRXSTSP);
+
+    ctx = usbotghs_get_context();
+    log_printf("[USBOTG][HS] Rxflvl handler\n");
 
     /* what is our mode (Host or Dev) ? Set corresponding variables */
     switch (ctx->mode) {
@@ -594,6 +568,7 @@ static mbed_error_t rxflvl_handler(void)
 	dpid = USBOTG_HS_GRXSTSP_GET_DPID(grxstsp);
 	bcnt =  USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp);
 	size = 0;
+
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
     if (ctx->mode == USBOTGHS_MODE_DEVICE) {
         log_printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
@@ -626,8 +601,7 @@ static mbed_error_t rxflvl_handler(void)
                 case PKT_STATUS_OUT_DATA_PKT_RECV:
                 {
                     log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT Recv\n");
-                    if (ctx->out_eps[epnum].configured != true ||
-                        ctx->out_eps[epnum].state != USBOTG_HS_EP_STATE_DATA_OUT)
+                    if (ctx->out_eps[epnum].configured != true)
                     {
                         log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP %d!\n", epnum);
                         /* to clear RXFLVL IT, we must read from FIFO. read to garbage here */

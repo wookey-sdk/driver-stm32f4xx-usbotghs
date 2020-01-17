@@ -147,7 +147,7 @@ mbed_error_t usbotghs_declare(void)
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mask =
                  USBOTG_HS_GINTMSK_OEPINT_Msk   |
                  USBOTG_HS_GINTMSK_IEPINT_Msk   |
-                 USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
+//XXX:                 USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
                  USBOTG_HS_GINTMSK_PTXFEM_Msk   |
 				 USBOTG_HS_GINTMSK_RXFLVLM_Msk;
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mode = 1; /* binary inversion */
@@ -409,6 +409,8 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /* while size is bigger than the TxFIFO size, we must loop on FIFO size write */
     while (residual_size > fifo_size) {
 
+        log_printf("[USBOTG][HS] need to write %d bytes, fifo size is %d\n", residual_size, fifo_size);
+
         packet_count = (fifo_size / ep->mpsize) + ((fifo_size % ep->mpsize) ? 1: 0);
 
         /* wait while there is enough space in TxFIFO */
@@ -487,6 +489,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
          * size_written_in_fifo / ep->mpsize (+ 1 residual packet if the division has a carry)
          */
 
+        log_printf("[USBOTG][HS] need to write %d bytes, fifo size is %d\n", residual_size, fifo_size);
         /* wait while there is enough space in TxFIFO */
         while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) <
                 (residual_size / 4 + (residual_size & 3 ? 1 : 0))) {
@@ -544,15 +547,22 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         }
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
-        usbotghs_write_epx_fifo(fifo_size, ep);
+        usbotghs_write_epx_fifo(residual_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         //usbotghs_wait_for_xmit_complete(ep);
 
         sent_data += residual_size;
         residual_size = 0;
+
         set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, oldmask, 0xffffffff, 0);
     }
+    /* transmission is now finished. Suspended ? */
+    if(get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)) {
+        log_printf("[USBOTG][HS] Suspended! flushing TxFIFO\n");
+        usbotghs_txfifo_flush_all();
+    }
+
 err:
     return errcode;
 }
@@ -575,6 +585,21 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+
+    /*
+     * Be sure that previous transmission is finished before configuring another one
+     */
+    log_printf("[USBOTG][HS] Sending ZLP on ep %d\n", ep_id);
+    while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) <
+            USBOTG_HS_TX_CORE_FIFO_SZ / 4) {
+        /* Are we suspended? */
+        if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
+            log_printf("[USBOTG][HS] Suspended!\n");
+            errcode = MBED_ERROR_BUSY;
+            goto err;
+        }
+    }
+
     /* EP is now in DATA_OUT state */
     ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
     if (ctx->mode == USBOTGHS_MODE_DEVICE) {
@@ -608,6 +633,7 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
         set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
                 USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DOEPCTL_EPENA_Msk);
     }
+
     /* wait for XMIT data to be transfered (wait for iepint (or oepint in
      * host mode) to set the EP in correct state */
     //usbotghs_wait_for_xmit_complete(ep);
@@ -624,6 +650,122 @@ mbed_error_t usbotghs_global_stall(void)
     return errcode;
 }
 
+mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    uint32_t count = 0;
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            if (ctx->in_eps[ep_id].configured == false) {
+                errcode = MBED_ERROR_INVSTATE;
+                goto err;
+            }
+            /* wait for end of current transmission */
+            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_EPENA_Msk, USBOTG_HS_DIEPCTL_EPENA_Pos))  {
+                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
+                    log_printf("[USBOTG][HS] HANG! DIEPCTL:EPENA\n");
+                    errcode = MBED_ERROR_BUSY;
+                    goto err;
+                }
+            }
+
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
+        case USBOTG_HS_EP_DIR_OUT:
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            if (ctx->out_eps[ep_id].configured == false) {
+                errcode = MBED_ERROR_INVSTATE;
+                goto err;
+            }
+            /* wait for end of current transmission */
+            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {
+                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
+                    log_printf("[USBOTG][HS] HANG! DOEPCTL:EPENA\n");
+                    errcode = MBED_ERROR_BUSY;
+                    goto err;
+                }
+            }
+
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+    }
+err:
+    return errcode;
+}
+mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    uint32_t count = 0;
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+
+    log_printf("[USBOTG][HS] CNAK on ep %d\n", ep_id);
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            if (ctx->in_eps[ep_id].configured == false) {
+                errcode = MBED_ERROR_INVSTATE;
+                goto err;
+            }
+            /* wait for end of current transmission */
+            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_EPENA_Msk, USBOTG_HS_DIEPCTL_EPENA_Pos))  {
+                if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
+                    log_printf("[USBOTG][HS] HANG! DIEPCTL:EPENA\n");
+                    errcode = MBED_ERROR_BUSY;
+                    goto err;
+                }
+            }
+
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
+        case USBOTG_HS_EP_DIR_OUT:
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            if (ctx->out_eps[ep_id].configured == false) {
+                errcode = MBED_ERROR_INVSTATE;
+                goto err;
+            }
+            /* wait for end of current transmission */
+            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {
+                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
+                    log_printf("[USBOTG][HS] HANG! DOEPCTL:EPENA\n");
+                    errcode = MBED_ERROR_BUSY;
+                    goto err;
+                }
+            }
+
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+    }
+err:
+    return errcode;
+}
+
+
 /*
  * Clear the global STALL mode for the device
  */
@@ -637,20 +779,74 @@ mbed_error_t usbotghs_global_stall_clear(void)
 /*
  * Set the STALL mode for the given EP. This mode has priority on the global STALL mode
  */
-mbed_error_t usbotghs_endpoint_stall(uint8_t ep)
+mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-    ep = ep;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    uint32_t count = 0;
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            if (ctx->in_eps[ep_id].configured == false) {
+                errcode = MBED_ERROR_INVSTATE;
+                goto err;
+            }
+            /* wait for end of current transmission */
+            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_EPENA_Msk, USBOTG_HS_DIEPCTL_EPENA_Pos))  {
+                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
+                    log_printf("[USBOTG][HS] HANG! DIEPCTL:EPENA\n");
+                    errcode = MBED_ERROR_BUSY;
+                    goto err;
+                }
+
+                continue; //FIXME TIMEOUT
+            }
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_EPDIS_Msk);
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_STALL_Msk);
+        case USBOTG_HS_EP_DIR_OUT:
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            if (ctx->out_eps[ep_id].configured == false) {
+                errcode = MBED_ERROR_INVSTATE;
+                goto err;
+            }
+            /* wait for end of current transmission */
+            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {
+                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
+                    log_printf("[USBOTG][HS] HANG! DIEPCTL:EPENA\n");
+                    errcode = MBED_ERROR_BUSY;
+                    goto err;
+                }
+            }
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPDIS_Msk);
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_STALL_Msk);
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+    }
+
+err:
     return errcode;
 }
 
 /*
  * Clear the STALL mode for the given EP
  */
-mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep)
+mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     ep = ep;
+    dir = dir;
     return errcode;
 }
 

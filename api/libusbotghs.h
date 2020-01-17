@@ -130,6 +130,7 @@ typedef enum {
     USBOTG_HS_EP_DIR_OUT,
 } usbotghs_ep_dir_t;
 
+
 /*********************************************************************************
  * About handlers
  *
@@ -245,12 +246,16 @@ mbed_error_t usbotghs_global_stall_clear(void);
 /*
  * Set the STALL mode for the given EP
  */
-mbed_error_t usbotghs_endpoint_stall(uint8_t ep);
+mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir);
 
 /*
  * Clear the STALL mode for the given EP
  */
-mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep);
+mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir);
+
+mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
+
+mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
 
 /*
  * Activate the given EP (for e.g. to transmit data)
