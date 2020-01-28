@@ -350,6 +350,8 @@ reset ? */
     usbotghs_ctx.out_eps[0].fifo_size = 0; /* not yet configured */
     usbotghs_ctx.in_eps[0].fifo_lck = false;
 
+    usbotghs_ctx.speed = USBOTG_HS_SPEED_HS; /* default. In device mode, wait for enumeration */
+
 err:
     return errcode;
 }
@@ -510,6 +512,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         } else {
             packet_count = 1;
         }
+        log_printf("[send] pkt_count: %d, send: %d\n", packet_count, residual_size);
         usbotghs_set_xmit_fifo(&(src[sent_data]), residual_size, ep_id);
         /*
          * Now configure the core to handle the current TxFIFO content
@@ -558,10 +561,15 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, oldmask, 0xffffffff, 0);
     }
     /* transmission is now finished. Suspended ? */
-    if(get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)) {
+#if 0
+    {
+    do {
+        /* wait for end of transmission i.e. suspend */
+    } while (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS);
         log_printf("[USBOTG][HS] Suspended! flushing TxFIFO\n");
         usbotghs_txfifo_flush_all();
     }
+#endif
 
 err:
     return errcode;
@@ -589,7 +597,6 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
     /*
      * Be sure that previous transmission is finished before configuring another one
      */
-    log_printf("[USBOTG][HS] Sending ZLP on ep %d\n", ep_id);
     while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) <
             USBOTG_HS_TX_CORE_FIFO_SZ / 4) {
         /* Are we suspended? */
@@ -600,43 +607,25 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
         }
     }
 
+    log_printf("[USBOTG][HS] Sending ZLP on ep %d\n", ep_id);
+    /* device mode ONLY */
     /* EP is now in DATA_OUT state */
-    ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
-        /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
-         * and the corresponding packet count. */
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                1,
-                USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
-                USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+    // XXX: needed for ZLP ? ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+    /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
+     * and the corresponding packet count. */
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+            1,
+            USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+            USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
 
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                0,
-                USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
-                USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
-        /* 2. Enable endpoint for transmission. */
-        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
-                USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
-    } else {
-        /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
-         * and the corresponding packet count. */
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                1,
-                USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
-                USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+            0,
+            USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+            USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+    /* 2. Enable endpoint for transmission. */
+    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+            USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
 
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                0,
-                USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
-                USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
-        /* 2. Enable endpoint for transmission. */
-        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
-                USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DOEPCTL_EPENA_Msk);
-    }
-
-    /* wait for XMIT data to be transfered (wait for iepint (or oepint in
-     * host mode) to set the EP in correct state */
-    //usbotghs_wait_for_xmit_complete(ep);
 err:
     return errcode;
 }
@@ -710,24 +699,27 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
-    uint32_t count = 0;
+    //uint32_t count = 0;
     /* sanitize */
     if (ctx == NULL) {
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
 
-    log_printf("[USBOTG][HS] CNAK on ep %d\n", ep_id);
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
+            log_printf("[USBOTG][HS] CNAK on IN ep %d\n", ep_id);
             if (ep_id >= USBOTGHS_MAX_IN_EP) {
+                log_printf("[USBOTG][HS] invalid IN EP %d\n", ep_id);
                 errcode = MBED_ERROR_INVPARAM;
                 goto err;
             }
             if (ctx->in_eps[ep_id].configured == false) {
+                log_printf("[USBOTG][HS] invalid IN EP %d: not configured\n", ep_id);
                 errcode = MBED_ERROR_INVSTATE;
                 goto err;
             }
+#if 0
             /* wait for end of current transmission */
             while (get_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_EPENA_Msk, USBOTG_HS_DIEPCTL_EPENA_Pos))  {
                 if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
@@ -736,17 +728,23 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                     goto err;
                 }
             }
+#endif
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
+            break;
         case USBOTG_HS_EP_DIR_OUT:
+            log_printf("[USBOTG][HS] CNAK on OUT ep %d\n", ep_id);
             if (ep_id >= USBOTGHS_MAX_OUT_EP) {
+                log_printf("[USBOTG][HS] invalid OUT EP %d\n", ep_id);
                 errcode = MBED_ERROR_INVPARAM;
                 goto err;
             }
             if (ctx->out_eps[ep_id].configured == false) {
+                log_printf("[USBOTG][HS] invalid OUT EP %d: not configured\n", ep_id);
                 errcode = MBED_ERROR_INVSTATE;
                 goto err;
             }
+#if 0
             /* wait for end of current transmission */
             while (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {
                 if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
@@ -755,9 +753,12 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                     goto err;
                 }
             }
+#endif
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
+            break;
         default:
+            log_printf("[USBOTG][HS] CNAK: invalid direction for ep %d\n", ep_id);
             errcode = MBED_ERROR_INVPARAM;
             goto err;
     }

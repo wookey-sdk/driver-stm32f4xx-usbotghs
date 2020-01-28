@@ -299,14 +299,30 @@ static mbed_error_t enumdone_handler(void)
 
 	/* 1. read the OTG_HS_DSTS register to determine the enumeration speed. */
 	uint8_t speed = get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_ENUMSPD);
-	if (speed != USBOTG_HS_DSTS_ENUMSPD_HS) {
-		log_printf("[USB HS][ENUMDONE]  Wrong enum speed !\n");
+    usbotghs_context_t *ctx = usbotghs_get_context();
+
+	if (speed == USBOTG_HS_DSTS_ENUMSPD_HS) {
+		log_printf("[USB HS][ENUMDONE] High speed enumerated !\n");
+    } else if (speed == USBOTG_HS_DSTS_ENUMSPD_FS) {
+        /* Detect if we are in FS mode (PHY clock at 48Mhz) */
+		log_printf("[USB HS][ENUMDONE] Full speed enumerated !\n");
+        ctx->speed = USBOTG_HS_SPEED_FS;
+	} else {
+		log_printf("[USB HS][ENUMDONE] invalid speed 0x%x !\n", speed);
         errcode = MBED_ERROR_INITFAIL;
-		goto err;
-	}
+        goto err;
+    }
 
     /* TODO Program the MPSIZ field in OTG_HS_DIEPCTL0 to set the maximum packet size. This
      * step configures control endpoint 0.
+     */
+    /*
+     * INFO: maximum packet size of control EP in FS and HS is not the same:
+     * LS: 8 bytes
+     * FS: 8, 16, 32 or 64 bytes
+     * HS: 64 bytes only
+     * Here we use 64 bytes, compliant with both FS and HS.
+     * LS is not supported.
      */
 	set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(0),
 		      USBOTG_HS_DIEPCTL0_MPSIZ_64BYTES,
@@ -358,9 +374,9 @@ static mbed_error_t oepint_handler(void)
                 printf("[USBOTG][HS] received data on ep %x\n", ep_id);
                 /* calling upper handler */
                 uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
-                set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
                 if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
+                    //set_reg_bits(r_CORTEX_M_USBOTG_HS || dpid != DATA_PID_DATA0_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
                     errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                 }
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
@@ -605,20 +621,24 @@ static mbed_error_t rxflvl_handler(void)
                     {
                         log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP %d!\n", epnum);
                         /* to clear RXFLVL IT, we must read from FIFO. read to garbage here */
-                        uint8_t buf[16];
-                        for (; bcnt > 16; bcnt -= 16) {
-                            usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                        if (bcnt > 0) {
+                            uint8_t buf[16];
+                            for (; bcnt > 16; bcnt -= 16) {
+                                usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                            }
+                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
                         }
-                        usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
-
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
                     // TODO:
-#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
-                    usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN;
-#else
+//#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
+                    if (bcnt > 0) {
+                        usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
+                    }
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
+//#else
+#if 0
                     /* XXX: in case of DMA mode activated, the RAM FIFO recopy should be
                      * handled by the Core itself, and OEPINT executed automatically... */
                     /* Although, we may have to check the RAM buffer address and size
@@ -628,14 +648,14 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_OUT_TRANSFER_COMPLETE:
                 {
-                    log_printf("[USB HS][RXFLVL] EP0 OUT Transfer complete on EP %d\n", epnum);
+                    log_printf("[USB HS][RXFLVL] OUT Transfer complete on EP %d\n", epnum);
                     if (ctx->out_eps[epnum].configured != true) /* which state on OUT TRSFER Complete ? */
                     {
-                        log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP!\n");
+                        log_printf("[USB HS][RXFLVL] OUT Data PKT on invalid EP!\n");
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT;
                     break;
                 }
                 case PKT_STATUS_SETUP_TRANS_COMPLETE:
@@ -651,8 +671,8 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_SETUP_PKT_RECEIVED:
                 {
-                    log_printf("[USB HS][RXFLVL] EP0 Setup pkt receive\n");
-                    if (epnum != EP0 || dpid != DATA_PID_DATA0) {
+                    log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
+                    if (epnum != EP0) {
 
                         uint8_t buf[16];
                         for (; bcnt > 16; bcnt -= 16) {
@@ -678,19 +698,18 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 default:
                     log_printf("RXFLVL bad status %x!", pktsts.devsts);
-
+                    break;
             }
+            break;
         }
         case USBOTGHS_MODE_HOST:
-        {
             /* TODO: handle Host mode RXFLVL behavior */
-        }
-        break;
+            break;
+        default:
+            break;
     }
 err:
 	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
-    /* XXX; in dev mode only, should not be required */
-	//set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
     return errcode;
 }
 

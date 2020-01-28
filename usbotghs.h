@@ -59,7 +59,11 @@
  * Driver private structures and types
  */
 
-/* setup packet, to be passed to upper libctrl */
+typedef enum {
+    USBOTG_HS_SPEED_LS = 0, /* aka Low speed (USB 1.0) */
+    USBOTG_HS_SPEED_FS = 1, /* aka Full Speed (USB 1.1) */
+    USBOTG_HS_SPEED_HS = 2, /* aka High speed (USB 2.0) */
+} usbotghs_speed_t;
 
 /*
  * local context hold by the driver
@@ -90,6 +94,7 @@ typedef struct {
     bool                gonak_active;    /* global OUT NAK effective */
     usbotghs_ep_t       in_eps[USBOTGHS_MAX_IN_EP];       /* list of HW supported IN EPs */
     usbotghs_ep_t       out_eps[USBOTGHS_MAX_OUT_EP];      /* list of HW supported OUT EPs */
+    volatile usbotghs_speed_t    speed;        /* device enumerated speed, default HS */
 } usbotghs_context_t;
 
 usbotghs_context_t *usbotghs_get_context(void);
