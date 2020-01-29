@@ -213,6 +213,7 @@ static mbed_error_t reset_handler(void)
     log_printf("[USB HS][RESET] received USB Reset\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
+#if 0
     for (uint8_t i = 0; i < USBOTGHS_MAX_OUT_EP; ++i) {
         /* if Out EPi is configured, set DOEPCTLi.SNAK to 1 */
         if (ctx->out_eps[i].configured) {
@@ -221,6 +222,7 @@ static mbed_error_t reset_handler(void)
                          USBOTG_HS_DOEPCTL_CNAK_Msk);
         }
     }
+#endif
     /* unmask control pipe requested interrupt bits:
      * activate OEPInt, IEPInt & RxFIFO non-empty.
      * Ready to receive requests on EP0.

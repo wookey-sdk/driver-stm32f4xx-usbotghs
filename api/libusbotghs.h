@@ -260,22 +260,22 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
 /*
  * Activate the given EP (for e.g. to transmit data)
  */
-mbed_error_t usbotghs_activate_endpoint(uint8_t               ep,
-                                        usbotghs_ep_type_t    type,
-                                        usbotghs_epx_mpsize_t mpsize,
-                                        usbotghs_ep_toggle_t  dtoggle);
+mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
+                                         usbotghs_ep_type_t    type,
+                                         usbotghs_ep_dir_t     dir,
+                                         usbotghs_epx_mpsize_t mpsize,
+                                         usbotghs_ep_toggle_t  dtoggle);
 
 /*
  * Deactivate the given EP (Its configuration is keeped, the EP is *not* deconfigured)
  */
-mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep);
+mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
 
 /*
  * Configure the given EP in order to be ready to work
  */
-mbed_error_t usbotghs_configure_endpoint(uint8_t               id,
-                                         usbotghs_ep_type_t    type,
-                                         usbotghs_epx_mpsize_t mpsize);
+mbed_error_t usbotghs_activate_endpoint(uint8_t               id,
+                                        usbotghs_ep_dir_t     dir);
 
 /*
  * Deconfigure the given EP. The EP is no more usable after this call. A new configuration
@@ -283,7 +283,8 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               id,
  * This function is typically used on SetConfiguration Requests schedule, or on
  * Reset frame reception to reconfigure the Core in a known clear state.
  */
-mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
+mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep,
+                                          usbotghs_ep_dir_t     dir);
 
 
 /**

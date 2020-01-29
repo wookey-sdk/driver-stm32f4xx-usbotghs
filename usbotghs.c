@@ -856,15 +856,54 @@ mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir)
  * configure a new endpoint with the given configuration (type, mode, data toggle,
  * FIFO informations)
  */
-mbed_error_t usbotghs_activate_endpoint(uint8_t               ep,
-                                        usbotghs_ep_type_t    type,
-                                        usbotghs_epx_mpsize_t mpsize,
-                                        usbotghs_ep_toggle_t  dtoggle)
-{
+mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
+                                         usbotghs_ep_type_t    type,
+                                         usbotghs_ep_dir_t     dir,
+                                         usbotghs_epx_mpsize_t mpsize,
+                                         usbotghs_ep_toggle_t  dtoggle)
+ {
     mbed_error_t errcode = MBED_ERROR_NONE;
-    ep = ep;
-    type = type;
-    mpsize = mpsize;
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), type,
+                    USBOTG_HS_DIEPCTL_EPTYP_Msk,
+                    USBOTG_HS_DIEPCTL_EPTYP_Pos);
+
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), mpsize,
+                          USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),
+                          USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
+
+            if (type == USBOTG_HS_EP_TYPE_BULK || type == USBOTG_HS_EP_TYPE_INT) {
+                set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), dtoggle, USBOTG_HS_DIEPCTL_SD0PID);
+            }
+
+            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep), 128, USBOTG_HS_DIEPTXF_INEPTXFD);
+            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep), (128 * 4) * ep + (128 * 4)*2, USBOTG_HS_DIEPTXF_INEPTXSA);
+
+            /* Enable endpoint */
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), USBOTG_HS_DIEPCTL_USBAEP_Msk);
+            set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), ep, USBOTG_HS_DIEPCTL_CNAK);
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_IEPINT_Msk);
+            write_reg_value(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_IEPM(ep));
+            break;
+        case USBOTG_HS_EP_DIR_OUT:
+            /* Maximum packet size */
+            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
+                    mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),
+                    USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
+
+            /* FIXME Start data toggle */
+            if (type == USBOTG_HS_EP_TYPE_BULK || type == USBOTG_HS_EP_TYPE_INT) {
+                set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), dtoggle, USBOTG_HS_DOEPCTL_SD0PID);
+            }
+
+            /* Endpoint type */
+            set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), type, USBOTG_HS_DOEPCTL_EPTYP);
+
+            /*  USB active endpoint */
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), USBOTG_HS_DOEPCTL_USBAEP_Msk);
+            break;
+    }
     dtoggle = dtoggle;
     return errcode;
 }
@@ -875,10 +914,29 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               ep,
  * a configuration change is required, which implies that some old EPs need to be
  * removed before creating new ones.
  */
-mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep)
+mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-    ep = ep;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+
+    clear_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
+    if (ctx->in_eps[ep].configured == true) {
+        clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
+                USBOTG_HS_DIEPCTL_EPENA_Msk);
+    }
+    if (ctx->out_eps[ep].configured == true) {
+        clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
+                USBOTG_HS_DOEPCTL_EPENA_Msk);
+    }
+
+    set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
+
+err:
     return errcode;
 }
 
@@ -889,22 +947,49 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep)
  * in compliance with the currently enabled configuration and interface(s)
  * hold by the libUSBCtrl
  */
-mbed_error_t usbotghs_configure_endpoint(uint8_t                id,
-                                         usbotghs_ep_type_t     type,
-                                         usbotghs_epx_mpsize_t  mpsize)
+mbed_error_t usbotghs_activate_endpoint(uint8_t               ep_id,
+                                        usbotghs_ep_dir_t     dir)
 {
-
     mbed_error_t errcode = MBED_ERROR_NONE;
-    id = id;
-    type = type;
-    mpsize = mpsize;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    if (dir == USBOTG_HS_EP_DIR_IN) {
+        set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+                USBOTG_HS_DIEPCTL_EPENA_Msk);
+    } else {
+        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
+                  USBOTG_HS_DOEPCTL_EPENA_Msk);
+    }
+err:
     return errcode;
 }
 
-mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
+mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep,
+                                          usbotghs_ep_dir_t     dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-    ep = ep;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+
+    clear_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
+    if (dir == USBOTG_HS_EP_DIR_IN) {
+        clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
+                USBOTG_HS_DIEPCTL_EPENA_Msk);
+    } else {
+        clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
+                USBOTG_HS_DOEPCTL_EPENA_Msk);
+    }
+    set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
+
+err:
     return errcode;
 }
 
