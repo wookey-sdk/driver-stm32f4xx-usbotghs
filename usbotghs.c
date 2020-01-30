@@ -336,6 +336,7 @@ reset ? */
     usbotghs_ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
     usbotghs_ctx.in_eps[0].fifo_size = 0; /* not yet configured */
     usbotghs_ctx.in_eps[0].fifo_lck = false;
+    usbotghs_ctx.in_eps[0].dir = USBOTG_HS_EP_DIR_IN;
     if (mode == USBOTGHS_MODE_DEVICE) {
         usbotghs_ctx.in_eps[0].core_txfifo_empty = true;
     }
@@ -345,6 +346,7 @@ reset ? */
     usbotghs_ctx.out_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
     usbotghs_ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    usbotghs_ctx.out_eps[0].dir = USBOTG_HS_EP_DIR_OUT;
     usbotghs_ctx.out_eps[0].fifo = 0; /* not yet configured */
     usbotghs_ctx.out_eps[0].fifo_idx = 0; /* not yet configured */
     usbotghs_ctx.out_eps[0].fifo_size = 0; /* not yet configured */
@@ -695,6 +697,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
 err:
     return errcode;
 }
+
 mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -755,7 +758,7 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             }
 #endif
 
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
             break;
         default:
             log_printf("[USBOTG][HS] CNAK: invalid direction for ep %d\n", ep_id);
@@ -863,8 +866,25 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
                                          usbotghs_ep_toggle_t  dtoggle)
  {
     mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
+
+            ctx->in_eps[ep].id = ep;
+            ctx->in_eps[ep].dir = dir;
+            ctx->in_eps[ep].configured = true;
+            ctx->in_eps[ep].mpsize = mpsize;
+            ctx->in_eps[ep].type = type;
+            ctx->in_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
+            ctx->out_eps[ep].configured = false;
+
+            /* set EP configuration */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), type,
                     USBOTG_HS_DIEPCTL_EPTYP_Msk,
                     USBOTG_HS_DIEPCTL_EPTYP_Pos);
@@ -876,17 +896,24 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
             if (type == USBOTG_HS_EP_TYPE_BULK || type == USBOTG_HS_EP_TYPE_INT) {
                 set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), dtoggle, USBOTG_HS_DIEPCTL_SD0PID);
             }
-
-            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep), 128, USBOTG_HS_DIEPTXF_INEPTXFD);
-            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep), (128 * 4) * ep + (128 * 4)*2, USBOTG_HS_DIEPTXF_INEPTXSA);
+            /* set EP FIFO */
+            usbotghs_reset_epx_fifo(&(ctx->in_eps[ep]));
 
             /* Enable endpoint */
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), USBOTG_HS_DIEPCTL_USBAEP_Msk);
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), ep, USBOTG_HS_DIEPCTL_CNAK);
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_IEPINT_Msk);
+            //set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_IEPINT_Msk);
             write_reg_value(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_IEPM(ep));
             break;
         case USBOTG_HS_EP_DIR_OUT:
+            ctx->out_eps[ep].id = ep;
+            ctx->out_eps[ep].dir = dir;
+            ctx->out_eps[ep].configured = true;
+            ctx->out_eps[ep].mpsize = mpsize;
+            ctx->out_eps[ep].type = type;
+            ctx->out_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
+            ctx->in_eps[ep].configured = false;
+
             /* Maximum packet size */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
                     mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),
@@ -897,14 +924,18 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
                 set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), dtoggle, USBOTG_HS_DOEPCTL_SD0PID);
             }
 
+            /* set EP FIFO */
+            usbotghs_reset_epx_fifo(&(ctx->out_eps[ep]));
+
             /* Endpoint type */
             set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), type, USBOTG_HS_DOEPCTL_EPTYP);
 
+            write_reg_value(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_OEPM(ep));
             /*  USB active endpoint */
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), USBOTG_HS_DOEPCTL_USBAEP_Msk);
             break;
     }
-    dtoggle = dtoggle;
+err:
     return errcode;
 }
 

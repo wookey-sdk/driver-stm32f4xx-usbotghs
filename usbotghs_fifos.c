@@ -175,17 +175,23 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
                 3, USBOTG_HS_DOEPTSIZ_STUPCNT);
         set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
                 1, USBOTG_HS_DOEPCTL_CNAK);
+        usbotghs_txfifo_flush(0);
     } else {
         /* all other EPs have their DIEPTXF registers accesible through a single macro */
-        set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ep->mpsize, USBOTG_HS_DIEPTXF_INEPTXSA);
-        set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ep->mpsize, USBOTG_HS_DIEPTXF_INEPTXFD);
+        if (ep->dir == USBOTG_HS_EP_DIR_IN) {
+            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), (ep->mpsize / 4), USBOTG_HS_DIEPTXF_INEPTXFD);
+            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ((ep->mpsize / 4) * 4) * ep->id + ((ep->mpsize / 4) * 4)*2, USBOTG_HS_DIEPTXF_INEPTXSA);
+        } else {
+
+            //set_reg(r_CORTEX_M_USBOTG_HS_DOEPRXF(ep->id), (ep->mpsize / 4), USBOTG_HS_DIEPTXF_INEPTXFD);
+            //set_reg(r_CORTEX_M_USBOTG_HS_DOEPRXF(ep->id), ((ep->mpsize / 4) * 4) * ep + ((ep->mpsize / 4) * 4)*2, USBOTG_HS_DIEPTXF_INEPTXSA);
+        }
     }
     ep->fifo_idx = 0;
     ep->fifo = NULL;
     ep->fifo_lck = false;
     ep->fifo_size = 0;
     ep->core_txfifo_empty = true;
-    usbotghs_txfifo_flush(0);
     return MBED_ERROR_NONE;
 }
 

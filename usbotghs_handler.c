@@ -377,18 +377,20 @@ static mbed_error_t oepint_handler(void)
                 if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
                     //set_reg_bits(r_CORTEX_M_USBOTG_HS || dpid != DATA_PID_DATA0_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
-                    errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    if (ep_id == 0) {
+                        errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    }
                 }
+                /* Bit 0 XFRC: Data received complete */
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
                         /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
-#if 0
                     if (ep_id != 0) {
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                        errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     }
-#endif
                 }
+                /* XXX: only if SNAK set */
+                set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                 /* now that data has been handled, consider FIFO as empty */
                 ctx->out_eps[ep_id].fifo_idx = 0;
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
@@ -631,6 +633,20 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
+                    if (ctx->out_eps[epnum].state == USBOTG_HS_EP_STATE_SETUP) {
+                        /* associated oepint not yet executed, return NYET to host */
+                        if (bcnt > 0) {
+                            uint8_t buf[16];
+                            for (; bcnt > 16; bcnt -= 16) {
+                                usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                            }
+                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                        }
+                        usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
+                        errcode = MBED_ERROR_INVSTATE;
+                        goto err;
+
+                    }
                     // TODO:
 //#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
                     if (bcnt > 0) {
@@ -681,6 +697,19 @@ static mbed_error_t rxflvl_handler(void)
                         usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
 
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
+                        goto err;
+                    }
+                    if (ctx->out_eps[epnum].state == USBOTG_HS_EP_STATE_SETUP) {
+                        /* associated oepint not yet executed, return NYET to host */
+                        if (bcnt > 0) {
+                            uint8_t buf[16];
+                            for (; bcnt > 16; bcnt -= 16) {
+                                usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                            }
+                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                        }
+                        usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
+                        errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
                     if (bcnt == 0) {

@@ -74,6 +74,7 @@ typedef struct {
     uint16_t                     mpsize;       /* max packet size (bitfield, 11 bits, in bytes) */
     usbotghs_ep_type_t           type;         /* EP type */
     volatile usbotghs_ep_state_t state;        /* EP current state */
+    volatile usbotghs_ep_dir_t   dir;
 
     volatile uint8_t            *fifo;         /* associated RAM FIFO (recv) */
     volatile uint32_t            fifo_idx;     /* current FIFO index  (recv) */
