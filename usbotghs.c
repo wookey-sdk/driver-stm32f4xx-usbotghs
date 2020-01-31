@@ -324,6 +324,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode)
             break;
     }
 
+    usbotghs_ctx.fifo_idx = 0;
     /* initialize EP0, which is both IN & OUT EP */
     usbotghs_ctx.in_eps[0].id = 0;
     usbotghs_ctx.in_eps[0].configured = true; /* wait for reset, but EP0 ctrl is ready to recv
@@ -865,7 +866,8 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
                                          usbotghs_epx_mpsize_t mpsize,
                                          usbotghs_ep_toggle_t  dtoggle)
  {
-    mbed_error_t errcode = MBED_ERROR_NONE;
+     mbed_error_t errcode = MBED_ERROR_NONE;
+     printf("[USBOTGHS] configure EP %d: dir %d, mpsize %d, type %x\n", ep, dir, mpsize, type);
     usbotghs_context_t *ctx = usbotghs_get_context();
     /* sanitize */
     if (ctx == NULL) {
@@ -875,6 +877,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
 
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
+            printf("[USBOTGHS] enable EP %d: dir IN, mpsize %d, type %x\n", ep, mpsize, type);
 
             ctx->in_eps[ep].id = ep;
             ctx->in_eps[ep].dir = dir;
@@ -903,9 +906,10 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), USBOTG_HS_DIEPCTL_USBAEP_Msk);
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), ep, USBOTG_HS_DIEPCTL_CNAK);
             //set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_IEPINT_Msk);
-            write_reg_value(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_IEPM(ep));
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_IEPM(ep));
             break;
         case USBOTG_HS_EP_DIR_OUT:
+            printf("[USBOTGHS] enable EP %d: dir OUT, mpsize %d, type %x\n", ep, mpsize, type);
             ctx->out_eps[ep].id = ep;
             ctx->out_eps[ep].dir = dir;
             ctx->out_eps[ep].configured = true;
@@ -919,20 +923,21 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
                     mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),
                     USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
 
+            /*  USB active endpoint */
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), USBOTG_HS_DOEPCTL_USBAEP_Msk);
+
             /* FIXME Start data toggle */
             if (type == USBOTG_HS_EP_TYPE_BULK || type == USBOTG_HS_EP_TYPE_INT) {
                 set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), dtoggle, USBOTG_HS_DOEPCTL_SD0PID);
             }
 
+            /* Endpoint type */
+            set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), type, USBOTG_HS_DOEPCTL_EPTYP);
             /* set EP FIFO */
             usbotghs_reset_epx_fifo(&(ctx->out_eps[ep]));
 
-            /* Endpoint type */
-            set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), type, USBOTG_HS_DOEPCTL_EPTYP);
 
-            write_reg_value(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_OEPM(ep));
-            /*  USB active endpoint */
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), USBOTG_HS_DOEPCTL_USBAEP_Msk);
+            set_reg_bits(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_OEPM(ep));
             break;
     }
 err:

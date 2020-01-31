@@ -93,6 +93,7 @@ typedef struct {
     usbotghs_dev_mode_t mode;            /* current OTG mode (host or device) */
     bool                gonak_req;       /* global OUT NAK requested */
     bool                gonak_active;    /* global OUT NAK effective */
+    uint16_t            fifo_idx;        /* consumed Core FIFO */
     usbotghs_ep_t       in_eps[USBOTGHS_MAX_IN_EP];       /* list of HW supported IN EPs */
     usbotghs_ep_t       out_eps[USBOTGHS_MAX_OUT_EP];      /* list of HW supported OUT EPs */
     volatile usbotghs_speed_t    speed;        /* device enumerated speed, default HS */

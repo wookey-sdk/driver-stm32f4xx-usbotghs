@@ -589,7 +589,7 @@ static mbed_error_t rxflvl_handler(void)
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
     if (ctx->mode == USBOTGHS_MODE_DEVICE) {
-        log_printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
+        printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
     } else if (ctx->mode == USBOTGHS_MODE_HOST) {
         log_printf("CH:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", chnum, pktsts.hoststs, bcnt, dpid);
     }
@@ -611,17 +611,17 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
                     }
-                    log_printf("[USB HS][RXFLVL] EP0 Global OUT NAK effective\n");
+                    log_printf("[USB HS][RXFLVL] EP%d Global OUT NAK effective\n", epnum);
                     ctx->gonak_active = true;
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
                     break;
                 }
                 case PKT_STATUS_OUT_DATA_PKT_RECV:
                 {
-                    log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT Recv\n");
+                    printf("[USB HS][RXFLVL] EP%d OUT Data PKT Recv\n", epnum);
                     if (ctx->out_eps[epnum].configured != true)
                     {
-                        log_printf("[USB HS][RXFLVL] EP0 OUT Data PKT on invalid EP %d!\n", epnum);
+                        log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT on invalid EP!\n", epnum);
                         /* to clear RXFLVL IT, we must read from FIFO. read to garbage here */
                         if (bcnt > 0) {
                             uint8_t buf[16];
@@ -648,13 +648,12 @@ static mbed_error_t rxflvl_handler(void)
 
                     }
                     // TODO:
-//#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
+#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
                     if (bcnt > 0) {
                         usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
                     }
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
-//#else
-#if 0
+#else
                     /* XXX: in case of DMA mode activated, the RAM FIFO recopy should be
                      * handled by the Core itself, and OEPINT executed automatically... */
                     /* Although, we may have to check the RAM buffer address and size
@@ -664,7 +663,7 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_OUT_TRANSFER_COMPLETE:
                 {
-                    log_printf("[USB HS][RXFLVL] OUT Transfer complete on EP %d\n", epnum);
+                    printf("[USB HS][RXFLVL] OUT Transfer complete on EP %d\n", epnum);
                     if (ctx->out_eps[epnum].configured != true) /* which state on OUT TRSFER Complete ? */
                     {
                         log_printf("[USB HS][RXFLVL] OUT Data PKT on invalid EP!\n");
@@ -676,7 +675,7 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_SETUP_TRANS_COMPLETE:
                 {
-                    log_printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
+                    printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
                     if (epnum != EP0 || bcnt != 0) {
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
@@ -687,7 +686,7 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_SETUP_PKT_RECEIVED:
                 {
-                    log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
+                    printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
                     if (epnum != EP0) {
 
                         uint8_t buf[16];
@@ -726,7 +725,7 @@ static mbed_error_t rxflvl_handler(void)
                     break;
                 }
                 default:
-                    log_printf("RXFLVL bad status %x!", pktsts.devsts);
+                    log_printf("[USB HS][RXFLVL] RXFLVL bad status %x!", pktsts.devsts);
                     break;
             }
             break;
