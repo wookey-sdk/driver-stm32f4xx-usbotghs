@@ -368,10 +368,10 @@ static mbed_error_t oepint_handler(void)
         /* here, this is a 'data received' interrupt */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
-        printf("[USBOTG][HS] handling received data\n");
+        log_printf("[USBOTG][HS] handling received data\n");
         for (uint8_t i = 0; i < 16; ++i) {
             if (daint & val) {
-                printf("[USBOTG][HS] received data on ep %x\n", ep_id);
+                log_printf("[USBOTG][HS] received data on ep %d\n", ep_id);
                 /* calling upper handler */
                 uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
                 if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
@@ -385,9 +385,9 @@ static mbed_error_t oepint_handler(void)
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
                         /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
-                    if (ep_id != 0) {
-                        errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
-                    }
+                }
+                if (ep_id != 0) {
+                    errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                 }
                 /* XXX: only if SNAK set */
                 set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
@@ -589,7 +589,7 @@ static mbed_error_t rxflvl_handler(void)
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
     if (ctx->mode == USBOTGHS_MODE_DEVICE) {
-        printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
+        log_printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
     } else if (ctx->mode == USBOTGHS_MODE_HOST) {
         log_printf("CH:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", chnum, pktsts.hoststs, bcnt, dpid);
     }
@@ -618,7 +618,7 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_OUT_DATA_PKT_RECV:
                 {
-                    printf("[USB HS][RXFLVL] EP%d OUT Data PKT Recv\n", epnum);
+                    log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT Recv\n", epnum);
                     if (ctx->out_eps[epnum].configured != true)
                     {
                         log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT on invalid EP!\n", epnum);
@@ -645,25 +645,17 @@ static mbed_error_t rxflvl_handler(void)
                         usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
-
                     }
-                    // TODO:
-#ifndef CONFIG_USR_DEV_USBOTGHS_DMA
-                    if (bcnt > 0) {
-                        usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
+                    if (bcnt == 0) {
+                        goto err;
                     }
+                    usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
-#else
-                    /* XXX: in case of DMA mode activated, the RAM FIFO recopy should be
-                     * handled by the Core itself, and OEPINT executed automatically... */
-                    /* Although, we may have to check the RAM buffer address and size
-                     * in OEPINT and reset them */
-#endif
                     break;
                 }
                 case PKT_STATUS_OUT_TRANSFER_COMPLETE:
                 {
-                    printf("[USB HS][RXFLVL] OUT Transfer complete on EP %d\n", epnum);
+                    log_printf("[USB HS][RXFLVL] OUT Transfer complete on EP %d\n", epnum);
                     if (ctx->out_eps[epnum].configured != true) /* which state on OUT TRSFER Complete ? */
                     {
                         log_printf("[USB HS][RXFLVL] OUT Data PKT on invalid EP!\n");
@@ -675,7 +667,7 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_SETUP_TRANS_COMPLETE:
                 {
-                    printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
+                    log_printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
                     if (epnum != EP0 || bcnt != 0) {
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
@@ -686,7 +678,7 @@ static mbed_error_t rxflvl_handler(void)
                 }
                 case PKT_STATUS_SETUP_PKT_RECEIVED:
                 {
-                    printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
+                    log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
                     if (epnum != EP0) {
 
                         uint8_t buf[16];
