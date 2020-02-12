@@ -385,9 +385,9 @@ static mbed_error_t oepint_handler(void)
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
                         /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
-                }
-                if (ep_id != 0) {
-                    errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    if (ep_id != 0) {
+                        errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    }
                 }
                 /* XXX: only if SNAK set */
                 set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
