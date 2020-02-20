@@ -495,10 +495,19 @@ static mbed_error_t iepint_handler(void)
 
                     log_printf("[USBOTG][HS] iepint: ep %d: transfert completed\n", ep_id);
 
-                    /* now EP is idle */
-                    ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
-                    /* inform libctrl of transfert complete */
-                    errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                    /* inform upper layer only on end of effetvive transfer. A transfer may be
+                     * the consequence of multiple FIFO flush, depending on the transfer size and
+                     * the FIFO size */
+                    if (ctx->in_eps[ep_id].state == USBOTG_HS_EP_STATE_DATA_IN) {
+                        /* now EP is idle */
+                        ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                        /* inform libctrl of transfert complete */
+                        errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                    } else {
+                        /* the EP is only set as IDLE to inform the send process
+                         * that the FIFO content is effectively sent */
+                        ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                    }
                     /* clear current FIFO, now that content is sent */
                     ctx->in_eps[ep_id].fifo = 0;
                     ctx->in_eps[ep_id].fifo_idx = 0;
@@ -650,7 +659,7 @@ static mbed_error_t rxflvl_handler(void)
                         goto err;
                     }
                     usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
+                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
                     break;
                 }
                 case PKT_STATUS_OUT_TRANSFER_COMPLETE:

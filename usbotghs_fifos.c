@@ -392,6 +392,7 @@ err:
     return errcode;
 }
 
+
 mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -400,6 +401,10 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
  	 * This is the FIFO number that must be flushed using the TxFIFO Flush bit.
  	 * This field must not be changed until the core clears the TxFIFO Flush bit.
  	 */
+    /*
+     * Is there a previous flush being executed ? If yes, wait for this flush to
+     * end.
+     */
     while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
         if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
             log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
@@ -418,6 +423,7 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
 	set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, ep_id, USBOTG_HS_GRSTCTL_TXFNUM);
 	set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, 1, USBOTG_HS_GRSTCTL_TXFFLSH);
 	count = 0;
+    /* wait for fifo flush to be executed */
     while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)) {
         if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
             log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
@@ -462,9 +468,9 @@ mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id)
     while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_RXFFLSH)) {
         if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
             log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the RxFIFO Flush bit GRSTCTL:RXFFLSH\n");
+            errcode = MBED_ERROR_BUSY;
+            goto err;
         }
-        errcode = MBED_ERROR_BUSY;
-        goto err;
     }
 	/*
 	 * The application must write this bit only after checking that the core is neither writing to the
@@ -479,13 +485,11 @@ mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id)
     while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_RXFFLSH)) {
         if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
             log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the RxFIFO Flush bit GRSTCTL:RXFFLSH\n");
+            errcode = MBED_ERROR_BUSY;
+            goto err;
         }
-        errcode = MBED_ERROR_BUSY;
-        goto err;
     }
 err:
     return errcode;
-
 }
-
 
