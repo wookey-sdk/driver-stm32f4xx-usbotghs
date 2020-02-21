@@ -397,7 +397,9 @@ static mbed_error_t oepint_handler(void)
                     }
                 }
                 /* XXX: only if SNAK set */
-                set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                if (ep_id == 0) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                }
                 /* now that data has been handled, consider FIFO as empty */
                 ctx->out_eps[ep_id].fifo_idx = 0;
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
