@@ -374,6 +374,7 @@ static mbed_error_t oepint_handler(void)
                 log_printf("[USBOTG][HS] received data on ep %d\n", ep_id);
                 /* calling upper handler */
                 uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
+                bool callback_called = false;
                 /* Bit 0 XFRC: Data received complete */
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
@@ -381,25 +382,24 @@ static mbed_error_t oepint_handler(void)
                      * If not, a race condition can happen, if RXFLVL handler is executed *before* the EP
                      * RxFIFO is set by the upper layer */
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
-                        /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
-                    if (ep_id != 0) {
-
-                        ctx->out_eps[ep_id].fifo = NULL;
-                        errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
-                        ctx->out_eps[ep_id].fifo_idx = 0;
-                    }
+                    /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
+                    errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    callback_called = true;
                 }
                 if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
-                    //set_reg_bits(r_CORTEX_M_USBOTG_HS || dpid != DATA_PID_DATA0_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
-                    if (ep_id == 0) {
+                    /* call upper layer on STUP only if not already called due to XFRC */
+                    if (!callback_called) {
                         errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    }
+                    if (ep_id == EP0) {
+                        /* EP0 SETUP handling is made in ISR mode only. In this very case, acknowledge can be done
+                         * syncrhonously, here. For any other stack (SCSI, DFU, and so on) acknowledge is done in
+                         * main thread */
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                     }
                 }
                 /* XXX: only if SNAK set */
-                if (ep_id == 0) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
-                }
                 /* now that data has been handled, consider FIFO as empty */
                 ctx->out_eps[ep_id].fifo_idx = 0;
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
