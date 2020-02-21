@@ -369,7 +369,7 @@ static mbed_error_t oepint_handler(void)
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
         log_printf("[USBOTG][HS] handling received data\n");
-        for (uint8_t i = 0; i < 16; ++i) {
+        for (int i = 0; daint; i++) {
             if (daint & val) {
                 log_printf("[USBOTG][HS] received data on ep %d\n", ep_id);
                 /* calling upper handler */
@@ -405,7 +405,7 @@ static mbed_error_t oepint_handler(void)
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
-            val = val << 1;
+            daint >>= 1;
         }
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
 #else
@@ -454,7 +454,7 @@ static mbed_error_t iepint_handler(void)
          */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
-        for (uint8_t i = 0; i < 16; ++i) {
+        for (int i = 0; daint; i++) {
             if (daint & val) {
                 /* an iepint for this EP is active */
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
@@ -537,7 +537,7 @@ static mbed_error_t iepint_handler(void)
                 /* calling upper handler, transmitted size read from DIEPSTS */
             }
             ep_id++;
-            val = val << 1;
+            daint >>= 1;
         }
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
 #else

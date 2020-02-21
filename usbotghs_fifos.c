@@ -272,8 +272,9 @@ err:
  */
 mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
 {
+
     mbed_error_t errcode = MBED_ERROR_NONE;
-    /* sanitation */
+/* sanitation */
     /* we consider that packet splitting is made by the caller (i.e. usbotghs_send()) */
     /* fixme: size > (USBOTG_HS_TX_CORE_FIFO_SZ - ep->fifo_idx) */
     if (size > USBOTG_HS_TX_CORE_FIFO_SZ) {
