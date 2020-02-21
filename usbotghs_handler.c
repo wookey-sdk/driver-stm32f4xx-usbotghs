@@ -250,19 +250,19 @@ static mbed_error_t reset_handler(void)
     /* fifo is RESET, in both Core registers and EP context. The FIFO will need
      * to be reconfigured later by the driver API (typically through upper
      * reset handler */
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+# if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* set TxFIFO for EP0 (in_eps[0]) */
         log_printf("[USB HS][RESET] initialize EP0 TxFIFO in device mode\n");
         if ((errcode = usbotghs_reset_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
             goto err;
         }
-    } else {
+#else
         /* set TxFIFO for EP0 (out_eps[0]) */
         log_printf("[USB HS][RESET] initialize EP0 TxFIFO in host mode\n");
         if ((errcode = usbotghs_reset_epx_fifo(&(ctx->out_eps[0]))) != MBED_ERROR_NONE) {
             goto err;
         }
-    }
+#endif
     /* flushing FIFOs */
     usbotghs_txfifo_flush(0);
     usbotghs_rxfifo_flush(0);
@@ -279,13 +279,13 @@ static mbed_error_t reset_handler(void)
 
     /* now that USB full stack execution is done, Enable Endpoint.
      * From now on, data can be received or sent on Endpoint 0 */
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+# if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         log_printf("[USB HS][RESET] enable EP0 out (reception)\n");
         set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
                 1, USBOTG_HS_DOEPCTL_EPENA);
-    } else {
+#else
         log_printf("[USB HS][RESET] host mode TODO\n");
-    }
+#endif
 err:
     return errcode;
 }
@@ -364,7 +364,7 @@ static mbed_error_t oepint_handler(void)
     /* get EPx on which the event came */
     daint = (uint16_t)((read_reg_value(r_CORTEX_M_USBOTG_HS_DAINT) >> 16) & 0xff);
     /* checking current mode */
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* here, this is a 'data received' interrupt */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
@@ -374,19 +374,26 @@ static mbed_error_t oepint_handler(void)
                 log_printf("[USBOTG][HS] received data on ep %d\n", ep_id);
                 /* calling upper handler */
                 uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
+                /* Bit 0 XFRC: Data received complete */
+                if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
+                    /* Here we set SNAK bit to avoid receiving data before the next read cmd config.
+                     * If not, a race condition can happen, if RXFLVL handler is executed *before* the EP
+                     * RxFIFO is set by the upper layer */
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
+                        /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
+                    if (ep_id != 0) {
+
+                        ctx->out_eps[ep_id].fifo = NULL;
+                        errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                        ctx->out_eps[ep_id].fifo_idx = 0;
+                    }
+                }
                 if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
                     //set_reg_bits(r_CORTEX_M_USBOTG_HS || dpid != DATA_PID_DATA0_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
                     if (ep_id == 0) {
-                        errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
-                    }
-                }
-                /* Bit 0 XFRC: Data received complete */
-                if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
-                        /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
-                    if (ep_id != 0) {
-                        errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                        errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     }
                 }
                 /* XXX: only if SNAK set */
@@ -399,7 +406,7 @@ static mbed_error_t oepint_handler(void)
             val = val << 1;
         }
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
-    } else {
+#else
         /* TODO: (FIXME host mode not working yet) here, this is a 'end of transmission' interrupt. Let's handle each
          * endpoint for which the interrupt rised */
         uint16_t val = 0x1;
@@ -416,7 +423,7 @@ static mbed_error_t oepint_handler(void)
             ep_id++;
             val = val << 1;
         }
-    }
+#endif
     return errcode;
 }
 
@@ -437,7 +444,7 @@ static mbed_error_t iepint_handler(void)
     /* get EPx on which the event came */
     daint = (uint16_t)(read_reg_value(r_CORTEX_M_USBOTG_HS_DAINT) & 0xff);
     /* checking current mode */
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /*
          * An event rose for one or more IN EPs.
          * First, for each EP, we handle driver level events (NAK, errors, etc.)
@@ -502,7 +509,7 @@ static mbed_error_t iepint_handler(void)
                         /* now EP is idle */
                         ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                         /* inform libctrl of transfert complete */
-                        errcode = usbctrl_handle_inepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                        errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                     } else {
                         /* the EP is only set as IDLE to inform the send process
                          * that the FIFO content is effectively sent */
@@ -531,7 +538,7 @@ static mbed_error_t iepint_handler(void)
             val = val << 1;
         }
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
-    } else {
+#else
         /* here, this is a 'data received' interrupt  (Host mode) */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
@@ -546,7 +553,7 @@ static mbed_error_t iepint_handler(void)
             ep_id++;
             val = val << 1;
         }
-    }
+#endif
     /* calling upper handler... needed ? */
     return errcode;
 }
@@ -561,8 +568,11 @@ static mbed_error_t rxflvl_handler(void)
 	pkt_status_t pktsts;
 	data_pid_t dpid;
 	uint16_t bcnt;
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
 	uint8_t epnum = 0; /* device case */
+#else
 	uint8_t chnum = 0; /* host case */
+#endif
 	uint32_t size;
     usbotghs_context_t *ctx;
 
@@ -579,29 +589,23 @@ static mbed_error_t rxflvl_handler(void)
     log_printf("[USBOTG][HS] Rxflvl handler\n");
 
     /* what is our mode (Host or Dev) ? Set corresponding variables */
-    switch (ctx->mode) {
-        case USBOTGHS_MODE_HOST:
-            pktsts.hoststs = USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp);
-            chnum = USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp);
-            break;
-        case USBOTGHS_MODE_DEVICE:
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
             pktsts.devsts = USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp);
             epnum = USBOTG_HS_GRXSTSP_GET_EPNUM(grxstsp);
-            break;
-        default:
-            errcode = MBED_ERROR_INVSTATE;
-            goto err;
-    }
+#else
+            pktsts.hoststs = USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp);
+            chnum = USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp);
+#endif
 	dpid = USBOTG_HS_GRXSTSP_GET_DPID(grxstsp);
 	bcnt =  USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp);
 	size = 0;
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+# if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         log_printf("EP:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", epnum, pktsts.devsts, bcnt, dpid);
-    } else if (ctx->mode == USBOTGHS_MODE_HOST) {
+# else
         log_printf("CH:%d, PKTSTS:%x, BYTES_COUNT:%x,  DATA_PID:%x\n", chnum, pktsts.hoststs, bcnt, dpid);
-    }
+# endif
 #endif
     /* 3. If the received packet’s byte count is not 0, the byte count amount of data
      * is popped from the receive Data FIFO and stored in memory. If the received packet
@@ -609,12 +613,10 @@ static mbed_error_t rxflvl_handler(void)
      *
      *   /!\ Reading an empty receive FIFO can result in undefined core behavior.
      */
-    switch (ctx->mode) {
-        case USBOTGHS_MODE_DEVICE:
-        {
-            /* 4. The receive FIFO’s packet status readout indicates one of the following: */
-            switch (pktsts.devsts) {
-                case PKT_STATUS_GLOBAL_OUT_NAK:
+# if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+        /* 4. The receive FIFO’s packet status readout indicates one of the following: */
+        switch (pktsts.devsts) {
+            case PKT_STATUS_GLOBAL_OUT_NAK:
                 {
                     if (epnum != EP0) {
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
@@ -625,19 +627,15 @@ static mbed_error_t rxflvl_handler(void)
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
                     break;
                 }
-                case PKT_STATUS_OUT_DATA_PKT_RECV:
+            case PKT_STATUS_OUT_DATA_PKT_RECV:
                 {
-                    log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT Recv\n", epnum);
+                    log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT (size %d) Recv\n", epnum, bcnt);
                     if (ctx->out_eps[epnum].configured != true)
                     {
                         log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT on invalid EP!\n", epnum);
                         /* to clear RXFLVL IT, we must read from FIFO. read to garbage here */
                         if (bcnt > 0) {
-                            uint8_t buf[16];
-                            for (; bcnt > 16; bcnt -= 16) {
-                                usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
-                            }
-                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                            usbotghs_rxfifo_flush(epnum);
                         }
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
@@ -645,11 +643,7 @@ static mbed_error_t rxflvl_handler(void)
                     if (ctx->out_eps[epnum].state == USBOTG_HS_EP_STATE_SETUP) {
                         /* associated oepint not yet executed, return NYET to host */
                         if (bcnt > 0) {
-                            uint8_t buf[16];
-                            for (; bcnt > 16; bcnt -= 16) {
-                                usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
-                            }
-                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                            usbotghs_rxfifo_flush(epnum);
                         }
                         usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         errcode = MBED_ERROR_INVSTATE;
@@ -658,11 +652,16 @@ static mbed_error_t rxflvl_handler(void)
                     if (bcnt == 0) {
                         goto err;
                     }
-                    usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
+                    log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT (size %d) Read EPx FIFO\n", epnum, bcnt);
+                    if (usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum])) != MBED_ERROR_NONE) {
+                        /* empty fifo on error */
+                        usbotghs_rxfifo_flush(epnum);
+                        usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
+                    }
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
                     break;
                 }
-                case PKT_STATUS_OUT_TRANSFER_COMPLETE:
+            case PKT_STATUS_OUT_TRANSFER_COMPLETE:
                 {
                     log_printf("[USB HS][RXFLVL] OUT Transfer complete on EP %d\n", epnum);
                     if (ctx->out_eps[epnum].configured != true) /* which state on OUT TRSFER Complete ? */
@@ -674,7 +673,7 @@ static mbed_error_t rxflvl_handler(void)
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT;
                     break;
                 }
-                case PKT_STATUS_SETUP_TRANS_COMPLETE:
+            case PKT_STATUS_SETUP_TRANS_COMPLETE:
                 {
                     log_printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
                     if (epnum != EP0 || bcnt != 0) {
@@ -685,7 +684,7 @@ static mbed_error_t rxflvl_handler(void)
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP;
                     break;
                 }
-                case PKT_STATUS_SETUP_PKT_RECEIVED:
+            case PKT_STATUS_SETUP_PKT_RECEIVED:
                 {
                     log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
                     if (epnum != EP0) {
@@ -725,18 +724,14 @@ static mbed_error_t rxflvl_handler(void)
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP_WIP;
                     break;
                 }
-                default:
-                    log_printf("[USB HS][RXFLVL] RXFLVL bad status %x!", pktsts.devsts);
-                    break;
-            }
-            break;
+            default:
+                log_printf("[USB HS][RXFLVL] RXFLVL bad status %x!", pktsts.devsts);
+                break;
         }
-        case USBOTGHS_MODE_HOST:
-            /* TODO: handle Host mode RXFLVL behavior */
-            break;
-        default:
-            break;
-    }
+
+#else
+        /* TODO: handle Host mode RXFLVL behavior */
+#endif
 err:
 	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
     return errcode;

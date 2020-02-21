@@ -42,6 +42,9 @@
 
 #define MAX_DATA_PACKET_SIZE(ep) (((ep) == 0) ? 64 : 512)
 
+
+typedef mbed_error_t (*usbotghs_ioep_handler_t)(uint32_t dev_id, uint32_t size, uint8_t ep);
+
 /*
  * The USB OTG support On-The-Go configuration (i.e. Host or Device mode, configurable
  * by software stack. This enumerate define which mode to use
@@ -185,7 +188,9 @@ mbed_error_t usbotghs_declare(void);
  * Core initial setup and config. At the end of the initialization, the Core should
  * have its USB control pipe ready to receive the first requests from the host.
  */
-mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode);
+mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
+                                usbotghs_ioep_handler_t ieph,
+                                usbotghs_ioep_handler_t oeph);
 
 /*
  * Sending data (whatever data type is (i.e. status on control pipe or data on
@@ -264,7 +269,8 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
                                          usbotghs_ep_type_t    type,
                                          usbotghs_ep_dir_t     dir,
                                          usbotghs_epx_mpsize_t mpsize,
-                                         usbotghs_ep_toggle_t  dtoggle);
+                                         usbotghs_ep_toggle_t  dtoggle,
+                                         usbotghs_ioep_handler_t handler);
 
 /*
  * Deactivate the given EP (Its configuration is keeped, the EP is *not* deconfigured)

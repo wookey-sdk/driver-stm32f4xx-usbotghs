@@ -8,6 +8,23 @@ if USR_DRV_USBOTGHS
 
 menu "USB-related features"
 
+choice
+   prompt "USBOTG HS driver mode"
+   default USR_DRV_USBOTGHS_MODE_DEVICE
+   config USR_DRV_USBOTGHS_MODE_DEVICE
+      bool "USB OTG HS driver in device mode"
+      ---help---
+      the driver is configured to work in device mode. EPs directions are
+      inverted in comparison with the host (and USB standard) mode, i.e.
+      IN EP send data, OUT EP receive data.
+   config USR_DRV_USBOTGHS_MODE_HOST
+      bool "USB OTG HS driver in host mode (WiP)"
+      ---help---
+      the driver is configured to work in host mode. EPs directions are
+      configured in USB standard mode, i.e. IN EP receive data, OUT EP send data.
+endchoice
+
+
 config USR_DRV_USBOTGHS_DEBUG
   bool "Activate debuggging for USB OTG HS driver"
   default n

@@ -75,6 +75,7 @@ typedef struct {
     usbotghs_ep_type_t           type;         /* EP type */
     volatile usbotghs_ep_state_t state;        /* EP current state */
     volatile usbotghs_ep_dir_t   dir;
+    usbotghs_ioep_handler_t      handler;      /* EP Handler for (I|O)EPEVENT */
 
     volatile uint8_t            *fifo;         /* associated RAM FIFO (recv) */
     volatile uint32_t            fifo_idx;     /* current FIFO index  (recv) */

@@ -238,7 +238,7 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     if (size > (ep->fifo_size - ep->fifo_idx)) {
-        log_printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo_size, ep->fifo_idx);
+        printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo_size, ep->fifo_idx);
         /* Why reading 0 bytes from Core FIFO ? */
         errcode = MBED_ERROR_INVPARAM;
         goto err;
@@ -317,13 +317,13 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     usbotghs_ep_t*      ep;
     mbed_error_t        errcode = MBED_ERROR_NONE;
 
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* reception is done ON out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
-    } else {
+#else
         /* reception is done IN out_eps in device mode */
         ep = &(ctx->in_eps[epid]);
-    }
+#endif
     if (!ep->configured) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
@@ -348,7 +348,12 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
                     dst);
 #endif
 
+    /* configure EP for receiving size amount of data */
+    uint32_t pktcount = size / ep->mpsize + (size & (ep->mpsize - 1) ? 1: 0);
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), pktcount, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), size, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep));
     /* FIFO is now configured */
+    /* CNAK is done by endpoint activation */
 err:
     return errcode;
 }
@@ -359,13 +364,13 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
     usbotghs_ep_t*      ep;
     mbed_error_t        errcode = MBED_ERROR_NONE;
 
-    if (ctx->mode == USBOTGHS_MODE_DEVICE) {
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* transmition is done using in_eps in device mode */
         ep = &(ctx->in_eps[epid]);
-    } else {
+#else
         /* transmition is done using out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
-    }
+#endif
     if (!ep->configured) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
