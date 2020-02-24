@@ -397,160 +397,97 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     uint32_t residual_size = size;
     uint32_t sent_data = 0;
 
-    /* while size is bigger than the TxFIFO size, we must loop on FIFO size write */
-    packet_count = (fifo_size / ep->mpsize) + ((fifo_size % ep->mpsize) ? 1: 0);
-    while (residual_size >= fifo_size) {
+    /*
+     * We can configure the core to handle the transmission of upto:
+     * - 1024 packets (independently of their size)
+     * - 1048575 bytes (2^19 - 1, independently of the number of packets)
+     *
+     * We consider here, that there is not request bigger than the max packet
+     * size in bytes (i.e. ~1Mbytes), and no request bigger than 1024 packets
+     * (in "data" EP such as mass storage where MPSize is 512, we can transmit
+     * upto 512*1024 = 512KBytes per transfer, which is huge).
+     */
 
-        log_printf("[USBOTG][HS] need to write %d bytes on ep %d, fifo size is %d\n", residual_size, ep_id, fifo_size);
-        if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < fifo_size / 4) {
-            usbotghs_txfifo_flush(ep_id);
-        }
-        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < fifo_size / 4) {
-            /* Are we suspended? */
-#if 0
+    /*
+     * First we configure the number of packets to transfer and the number of
+     * bytes to transfer
+     */
+    packet_count = (size / ep->mpsize) + ((size % ep->mpsize) ? 1: 0);
+
+    log_printf("[USBOTG][HS] need to write %d pkt on ep %d, init_size: %d\n", packet_count, ep_id, size);
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+    /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
+     * and the corresponding packet count. */
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+            packet_count,
+            USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+            USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+            size,
+            USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+            USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+    /* 2. Enable endpoint for transmission. */
+    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+            USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+    ep->state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
+#else
+    /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
+     * and the corresponding packet count. */
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+            packet_count,
+            USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
+            USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
+
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
+            size,
+            USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
+            USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
+    ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
+#endif
+    /*
+     * Now, we need to loop on the FIFO write and transmit, while there is
+     * data to send. The Core FIFO will handle the decrement of XFRSIZ and
+     * PKTCNT automatically, and will rise the XFRC interrupt when both reach
+     * 0.
+     */
+    /*
+     * First, we push FIFO size multiple into the FIFO
+     */
+    while (residual_size >= fifo_size) {
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (fifo_size / 4)) {
             if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
                 log_printf("[USBOTG][HS] Suspended!\n");
                 errcode = MBED_ERROR_BUSY;
                 goto err;
             }
-#endif
         }
-        /* wait while the EP is not IDLE (i.e. previous IEPINT has not risen, indicating that the FIFO content
-         * is flushed */
-        while (ep->state != USBOTG_HS_EP_STATE_IDLE) {
-            continue;
-        }
-
-        /*
-         * Now, for each TxFIFO, write, we must calculate the number of packet that need to be sent.
-         * The number of packet is equal to:
-         * size_written_in_fifo / ep->mpsize (+ 1 residual packet if the division has a carry)
-         */
+        /* set EP fifo to corresponding offset in SRC */
         if ((errcode = usbotghs_set_xmit_fifo(&(src[sent_data]), fifo_size, ep_id)) != MBED_ERROR_NONE) {
             log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
             goto err;
         }
 
-        /*
-         * Now configure the core to handle the current TxFIFO content
-         */
-#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-            /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
-             * and the corresponding packet count. */
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                      packet_count,
-                      USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
-                      USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
-
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                    fifo_size,
-                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
-                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
-            /* 2. Enable endpoint for transmission. */
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
-                   USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
-            ep->state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
-#else
-            /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
-             * and the corresponding packet count. */
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                      packet_count,
-                      USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
-                      USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
-
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                    fifo_size,
-                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
-                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
-            /* 2. Enable endpoint for transmission. */
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
-                   USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
-            ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
-#endif
-        /* set the EP state to DATA OUT WIP (not yet transmitted) */
+        /* write data from SRC to FIFO */
         usbotghs_write_epx_fifo(fifo_size, ep);
-
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         //usbotghs_wait_for_xmit_complete(ep);
-
         sent_data += fifo_size;
         residual_size -= fifo_size;
         log_printf("[USBOTG][HS] EP: %d: residual: %d\n", ep_id, residual_size);
     }
-    /* Now, handle potential non-NULL residual size */
+    /* Now, if there is residual size shorter than FIFO size, just send it */
     if (residual_size > 0) {
-        /*
-         * Again, we must calculate the number of packet that need to be sent.
-         * The number of packet is equal to:
-         * size_written_in_fifo / ep->mpsize (+ 1 residual packet if the division has a carry)
-         */
-
-        /* there may have some data in FIFO that are not yet sent, and in the same time, enough space to write
-         * residual_size into it. To avoid PKTCOUNT and PKTSZ corruption, we first flush potential previous
-         * data before reconfigure*/
-        log_printf("[USBOTG][HS] need to write %d bytes on ep %d, fifo size is %d\n", residual_size, ep_id, fifo_size);
         /* wait while there is enough space in TxFIFO */
-        if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) <
-                (fifo_size / 4)) {
-            usbotghs_txfifo_flush(ep_id);
-        }
-        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) <
-                (fifo_size / 4)) {
-            /* Are we suspended? */
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV)  < ((residual_size / 4) + (residual_size & 3 ? 1 : 0))) {
             if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
                 log_printf("[USBOTG][HS] Suspended!\n");
                 errcode = MBED_ERROR_BUSY;
                 goto err;
             }
         }
-        /* wait while the EP is not IDLE (i.e. previous IEPINT has not risen, indicating that the FIFO content
-         * is flushed */
-        while (ep->state != USBOTG_HS_EP_STATE_IDLE) {
-            continue;
-        }
-
-        if (residual_size > ep->mpsize) {
-            packet_count = (residual_size / ep->mpsize) + ((residual_size % ep->mpsize) ? 1: 0);
-        } else {
-            packet_count = 1;
-        }
-        log_printf("[send] pkt_count: %d, send: %d\n", packet_count, residual_size);
         usbotghs_set_xmit_fifo(&(src[sent_data]), residual_size, ep_id);
-        /*
-         * Now configure the core to handle the current TxFIFO content
-         */
-#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-            /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
-             * and the corresponding packet count. */
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                      packet_count,
-                      USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
-                      USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
-
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-                    residual_size,
-                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
-                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
-            /* 2. Enable endpoint for transmission. */
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
-                    USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
-#else
-            /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
-             * and the corresponding packet count. */
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                      packet_count,
-                      USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
-                      USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
-
-            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
-                    residual_size,
-                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
-                    USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
-            /* 2. Enable endpoint for transmission. */
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
-                    USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DOEPCTL_EPENA_Msk);
-#endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         usbotghs_write_epx_fifo(residual_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
@@ -559,11 +496,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
         sent_data += residual_size;
         residual_size = 0;
-
     }
-    //usbotghs_txfifo_flush_nowait(ep_id);
-    /* transmission is now finished. Suspended ? */
 
+    if(get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)) {
+        errcode = MBED_ERROR_BUSY;
+    }
 err:
     /* From whatever we come from to this point, the current transfer is complete
      * (with failure or not on upper level). IEPINT can inform the upper layer */

@@ -103,6 +103,7 @@ typedef enum {
 } usbotghs_int_id_t;
 
 
+static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
 
 static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
@@ -860,6 +861,7 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
          */
         if (val & 1)
         {
+            usbotghs_int_cnt[i]++;
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
             usbotghs_int_cnt[i]++;
 #endif
