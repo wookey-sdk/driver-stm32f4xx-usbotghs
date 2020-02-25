@@ -295,6 +295,32 @@ err:
     return errcode;
 }
 
+
+uint8_t *usbotghs_get_ep_fifo(uint8_t epnum, usbotghs_ep_dir_t dir)
+{
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    usbotghs_ep_t*      ep;
+    mbed_error_t        errcode = MBED_ERROR_NONE;
+    uint8_t *fifo = NULL;
+
+    if (dir == USBOTG_HS_EP_DIR_OUT) {
+        /* reception is done ON out_eps in device mode */
+        ep = &(ctx->out_eps[epid]);
+    } else {
+        /* reception is done IN out_eps in device mode */
+        ep = &(ctx->in_eps[epid]);
+    }
+    if (!ep->configured) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    fifo = ep->fifo;
+
+err:
+    return fifo;
+}
+
+
 /*
  * Configure for receiving data. Receiving data is a triggering event, not a direct call.
  * As a consequence, the upper layers have to specify the amount of data requested for
