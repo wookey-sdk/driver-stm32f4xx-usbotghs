@@ -305,16 +305,16 @@ uint8_t *usbotghs_get_ep_fifo(uint8_t epnum, usbotghs_ep_dir_t dir)
 
     if (dir == USBOTG_HS_EP_DIR_OUT) {
         /* reception is done ON out_eps in device mode */
-        ep = &(ctx->out_eps[epid]);
+        ep = &(ctx->out_eps[epnum]);
     } else {
         /* reception is done IN out_eps in device mode */
-        ep = &(ctx->in_eps[epid]);
+        ep = &(ctx->in_eps[epnum]);
     }
     if (!ep->configured) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
-    fifo = ep->fifo;
+    fifo = (uint8_t*)ep->fifo;
 
 err:
     return fifo;
