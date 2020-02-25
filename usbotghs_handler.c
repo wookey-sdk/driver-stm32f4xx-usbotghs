@@ -393,12 +393,7 @@ static mbed_error_t oepint_handler(void)
                     if (!callback_called) {
                         errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     }
-                    if (ep_id == EP0) {
-                        /* EP0 SETUP handling is made in ISR mode only. In this very case, acknowledge can be done
-                         * syncrhonously, here. For any other stack (SCSI, DFU, and so on) acknowledge is done in
-                         * main thread */
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
-                    }
+                    // ...
                 }
                 /* XXX: only if SNAK set */
                 /* now that data has been handled, consider FIFO as empty */
