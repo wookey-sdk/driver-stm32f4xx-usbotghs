@@ -375,29 +375,47 @@ static mbed_error_t oepint_handler(void)
                 log_printf("[USBOTG][HS] received data on ep %d\n", ep_id);
                 /* calling upper handler */
                 uint32_t doepint = read_reg_value(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id));
-                bool callback_called = false;
+                bool callback_to_call = false;
+                bool end_of_transfer = false;
+                if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
+                    log_printf("[USBOTG][HS] oepint: entering STUP\n");
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
+                    callback_to_call = true;
+                }
                 /* Bit 0 XFRC: Data received complete */
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
+                    log_printf("[USBOTG][HS] oepint: entering XFRC\n");
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
+                    if (ctx->out_eps[ep_id].fifo_idx == 0) {
+                        /* ZLP transfer initialited from the HOST */
+                        continue;
+                    }
+                    end_of_transfer = true;
                     /* Here we set SNAK bit to avoid receiving data before the next read cmd config.
                      * If not, a race condition can happen, if RXFLVL handler is executed *before* the EP
                      * RxFIFO is set by the upper layer */
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
-                    /* WHERE in the datasheet ? In disabling an OUT ep (p1360) */
-                    errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
-                    callback_called = true;
-                }
-                if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
-                    /* call upper layer on STUP only if not already called due to XFRC */
-                    if (!callback_called) {
-                        errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    /* XXX: defragmentation need to be checked for others (not EP0) EPs */
+                    if (ctx->out_eps[ep_id].fifo_idx < ctx->out_eps[ep_id].fifo_size) {
+                        /* handle defragmentation for DATA OUT packets on EP0 */
+                        log_printf("[USBOTG][HS] fragment pkt %d total, %d read\n", ctx->out_eps[ep_id].fifo_size, ctx->out_eps[ep_id].fifo_idx);
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                    } else {
+                        log_printf("[USBOTG][HS] oepint for %d data size read\n", ctx->out_eps[ep_id].fifo_idx);
+                        callback_to_call = true;
                     }
-                    // ...
+                }
+                if (callback_to_call == true) {
+                    log_printf("[USBOTG][HS] oepint: calling callback\n");
+                    errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+                    ctx->out_eps[ep_id].fifo_idx = 0;
+                    if (end_of_transfer == true) {
+                        log_printf("[USBOTG][HS] oepint: set CNAK (end of transfer)\n");
+                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                    }
                 }
                 /* XXX: only if SNAK set */
                 /* now that data has been handled, consider FIFO as empty */
-                ctx->out_eps[ep_id].fifo_idx = 0;
                 ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
             }
             ep_id++;
@@ -640,6 +658,7 @@ static mbed_error_t rxflvl_handler(void)
                     }
                     if (ctx->out_eps[epnum].state == USBOTG_HS_EP_STATE_SETUP) {
                         /* associated oepint not yet executed, return NYET to host */
+                        log_printf("[RXFLVL] recv DATA while in STUP mode!\n");
                         if (bcnt > 0) {
                             usbotghs_rxfifo_flush(epnum);
                         }
@@ -657,6 +676,13 @@ static mbed_error_t rxflvl_handler(void)
                         usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                     }
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
+                    if (epnum == EP0) {
+                        if (ctx->out_eps[epnum].fifo_idx < ctx->out_eps[epnum].fifo_size) {
+                            /* rise oepint to permit refragmentation at oepint layer */
+                            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epnum), 1, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epnum), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epnum));
+                            set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epnum), ctx->out_eps[epnum].mpsize, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epnum), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(epnum));
+                        }
+                    }
                     break;
                 }
             case PKT_STATUS_OUT_TRANSFER_COMPLETE:

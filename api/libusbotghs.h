@@ -306,6 +306,4 @@ void usbotghs_unbind(void);
 
 usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir);
 
-uint8_t *usbotghs_get_ep_fifo(uint8_t epnum, usbotghs_ep_dir_t dir);
-
 #endif /*!LIBUSBOTGHS_H_ */

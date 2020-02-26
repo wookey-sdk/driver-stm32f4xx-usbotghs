@@ -296,31 +296,6 @@ err:
 }
 
 
-uint8_t *usbotghs_get_ep_fifo(uint8_t epnum, usbotghs_ep_dir_t dir)
-{
-    usbotghs_context_t *ctx = usbotghs_get_context();
-    usbotghs_ep_t*      ep;
-    mbed_error_t        errcode = MBED_ERROR_NONE;
-    uint8_t *fifo = NULL;
-
-    if (dir == USBOTG_HS_EP_DIR_OUT) {
-        /* reception is done ON out_eps in device mode */
-        ep = &(ctx->out_eps[epnum]);
-    } else {
-        /* reception is done IN out_eps in device mode */
-        ep = &(ctx->in_eps[epnum]);
-    }
-    if (!ep->configured) {
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
-    fifo = (uint8_t*)ep->fifo;
-
-err:
-    return fifo;
-}
-
-
 /*
  * Configure for receiving data. Receiving data is a triggering event, not a direct call.
  * As a consequence, the upper layers have to specify the amount of data requested for
@@ -375,10 +350,23 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
                     dst);
 #endif
 
-    /* configure EP for receiving size amount of data */
-    uint32_t pktcount = size / ep->mpsize + (size & (ep->mpsize - 1) ? 1: 0);
-    set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), pktcount, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
-    set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), size, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep));
+    if (epid > 0) {
+        /* configure EP for receiving size amount of data */
+        uint32_t pktcount = size / ep->mpsize + (size & (ep->mpsize - 1) ? 1: 0);
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), pktcount, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), size, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep));
+    } else {
+        /* for EP0, the IP is not able to handle more than 64 bytes per
+         * transfer. As a consequence, even for bigger transfers (e.g. 4K)
+         * a fragmentation step is needed. This is done by:
+         * 1. settting pktcunt and pktsize so that oepint is executed for each
+         * 64 bytes packet
+         * 2. oepint (in DATA_OUT mode ) check that fifo_idx == fifo_size.
+         * If not, oepting does NOT call the upper class handler, silently
+         * acknowledge. */
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), 1, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), ep->mpsize, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(epid));
+    }
     /* FIFO is now configured */
     /* CNAK is done by endpoint activation */
 err:
