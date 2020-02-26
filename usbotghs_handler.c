@@ -409,7 +409,9 @@ static mbed_error_t oepint_handler(void)
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
-                    if (end_of_transfer == true) {
+                    if (end_of_transfer == true && ep_id == 0) {
+                        /* We synchronously handle CNAK only for EP0 data. others EP are handled by dedicated upper layer
+                         * class level handlers */
                         log_printf("[USBOTG][HS] oepint: set CNAK (end of transfer)\n");
                         set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                     }

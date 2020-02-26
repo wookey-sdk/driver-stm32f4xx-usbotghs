@@ -330,6 +330,11 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
+    if (size == 0) {
+        printf("[USBOTG] try to set FIFO of size 0\n");
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     if (ep->recv_fifo_dma_lck) {
         /* a DMA transaction is currently being executed toward the recv FIFO.
