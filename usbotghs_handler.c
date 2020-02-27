@@ -483,7 +483,6 @@ static mbed_error_t iepint_handler(void)
                 if (diepintx & USBOTG_HS_DIEPINT_TOC_Msk) {
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
                     ctx->in_eps[ep_id].core_txfifo_empty = true;
-                    ctx->in_eps[ep_id].fifo_idx = 0;
                     log_printf("[USBOTG][HS] iepint: ep %d: TxFifo empty\n", ep_id);
                 }
 
@@ -524,20 +523,46 @@ static mbed_error_t iepint_handler(void)
                      * the consequence of multiple FIFO flush, depending on the transfer size and
                      * the FIFO size */
                     if (ctx->in_eps[ep_id].state == USBOTG_HS_EP_STATE_DATA_IN) {
-                        /* now EP is idle */
-                        ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
-                        /* inform libctrl of transfert complete */
-                        errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                        if (ctx->in_eps[ep_id].fifo_idx < ctx->in_eps[ep_id].fifo_size) {
+
+                            log_printf("[USBOTG][HS] iepint: ep %d: still in fragmented transfer (%d on %d), continue...\n", ep_id, ctx->in_eps[ep_id].fifo_idx, ctx->in_eps[ep_id].fifo_size);
+                            /* still in fragmentation transfer. We need to start a new
+                             * transmission of the bigger size between mpsize and residual size
+                             * in order to finish the current transfer. The EP state is untouched */
+                            /* 1. Configure the endpoint to specify the amount of data to send, at
+                             * most MPSize */
+                            uint32_t datasize = ctx->in_eps[ep_id].fifo_size - ctx->in_eps[ep_id].fifo_idx;
+                            if (datasize > ctx->in_eps[ep_id].mpsize) {
+                                datasize = ctx->in_eps[ep_id].mpsize;
+                            }
+                            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                                    1,
+                                    USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+                                    USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+                            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                                    datasize,
+                                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+                                    USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
+                                    USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+                            /* 2. write data to fifo */
+                            usbotghs_write_epx_fifo(ctx->in_eps[ep_id].mpsize, &(ctx->in_eps[ep_id]));
+                        } else {
+                            /* now EP is idle */
+                            ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                            /* inform libctrl of transfert complete */
+                            errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                            ctx->in_eps[ep_id].fifo = 0;
+                            ctx->in_eps[ep_id].fifo_idx = 0;
+                            ctx->in_eps[ep_id].fifo_size = 0;
+                        }
                     } else {
                         /* the EP is only set as IDLE to inform the send process
                          * that the FIFO content is effectively sent */
+                        /* clear current FIFO, now that content is sent */
                         ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                     }
-                    /* clear current FIFO, now that content is sent */
-                    ctx->in_eps[ep_id].fifo = 0;
-                    ctx->in_eps[ep_id].fifo_idx = 0;
                 }
-
 #if 0
                 /* handle various events of the current IN EP */
                 /* TxFIFO (half) empty ? */

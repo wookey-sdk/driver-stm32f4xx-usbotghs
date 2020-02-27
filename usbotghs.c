@@ -332,7 +332,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     usbotghs_ctx.in_eps[0].configured = true; /* wait for reset, but EP0 ctrl is ready to recv
 XXX: shouldn't it be false, without FIFO as RXFLVL should not be received before
 reset ? */
-    usbotghs_ctx.in_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
+    usbotghs_ctx.in_eps[0].mpsize = USBOTG_HS_EPx_MPSIZE_64BYTES;
     usbotghs_ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
     usbotghs_ctx.in_eps[0].handler = ieph;
@@ -347,7 +347,7 @@ reset ? */
 
     usbotghs_ctx.out_eps[0].id = 0;
     usbotghs_ctx.out_eps[0].configured = true; /* wait for reset */
-    usbotghs_ctx.out_eps[0].mpsize = USBOTG_HS_EP0_MPSIZE_64BYTES;
+    usbotghs_ctx.out_eps[0].mpsize = USBOTG_HS_EPx_MPSIZE_64BYTES;
     usbotghs_ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
     usbotghs_ctx.out_eps[0].handler = oeph;
@@ -387,7 +387,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         goto err;
     }
     fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
-
+    /* configure EP FIFO internal informations */
+    if ((errcode = usbotghs_set_xmit_fifo(src, size, ep_id)) != MBED_ERROR_NONE) {
+       log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
+        goto err;
+    }
     /*
      * Here, we have to split the src content, taking into account the
      * current EP mpsize, and schedule transmission into the Core TxFIFO.
@@ -395,7 +399,6 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
     /* XXX: Here we assume fifo size == mpsize, which is bad..., fifo is bigger */
     uint32_t residual_size = size;
-    uint32_t sent_data = 0;
 
     /*
      * We can configure the core to handle the transmission of upto:
@@ -418,20 +421,38 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
     /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
      * and the corresponding packet count. */
-    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-            packet_count,
-            USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
-            USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+    /* EP 0 is not able to handle more than one packet of mpsize size per transfer. For bigger
+     * transfers, the driver must fragment data transfer transparently */
+    if (ep_id > 0 || size < ep->mpsize) {
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                packet_count,
+                USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+                USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
 
-    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
-            size,
-            USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
-            USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                size,
+                USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+                USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+    } else {
+        log_printf("[USBOTG][HS] need to write more data than the EP is able in a single transfer\n");
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                1,
+                USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
+                USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                ep->mpsize,
+                USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
+                USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+    }
     /* 2. Enable endpoint for transmission. */
     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
-            USBOTG_HS_DOEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+            USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
+
     ep->state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
 #else
+    /* EP 0 is not able to handle more than one packet of mpsize size per transfer. For bigger
+     * transfers, the driver must fragment data transfer transparently */
+    if (ep_id > 0 || size <= ep->mpsize) {
     /* 1. Program the OTG_HS_DOEPTSIZx register for the transfer size
      * and the corresponding packet count. */
     set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
@@ -443,9 +464,41 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
             size,
             USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
             USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
+    } else {
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid),
+                1,
+                USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid),
+                USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid),
+                ep->mpsize,
+                USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid),
+                USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(epid));
+    }
     ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
 #endif
+    /* Fragmentation on EP0 case: we don't loop on the input FIFO to
+     * synchronously transmit the data, we just write the first packet
+     * into the FIFO, and we wait for IEPINT. The successive next
+     * contents will be transmitted by iepint by detecting that
+     * ep->fifo_idx is smaller than ep->fifo_size (data transmission
+     * not finished) */
+    if (ep_id == 0 && size > ep->mpsize) {
+       log_printf("[USBOTG][HS] fragment: initiate the first fragment to send (MPSize) on EP0\n");
+        /* wait for enough space in TxFIFO */
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (ep->mpsize / 4)) {
+            if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
+                log_printf("[USBOTG][HS] Suspended!\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        }
+        /* write data from SRC to FIFO */
+        usbotghs_write_epx_fifo(ep->mpsize, ep);
+        goto err;
+    }
+
     /*
+     * Case of packets WITHOUT fragmentation
      * Now, we need to loop on the FIFO write and transmit, while there is
      * data to send. The Core FIFO will handle the decrement of XFRSIZ and
      * PKTCNT automatically, and will rise the XFRC interrupt when both reach
@@ -462,18 +515,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 goto err;
             }
         }
-        /* set EP fifo to corresponding offset in SRC */
-        if ((errcode = usbotghs_set_xmit_fifo(&(src[sent_data]), fifo_size, ep_id)) != MBED_ERROR_NONE) {
-            log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
-            goto err;
-        }
-
         /* write data from SRC to FIFO */
         usbotghs_write_epx_fifo(fifo_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         //usbotghs_wait_for_xmit_complete(ep);
-        sent_data += fifo_size;
         residual_size -= fifo_size;
         log_printf("[USBOTG][HS] EP: %d: residual: %d\n", ep_id, residual_size);
     }
@@ -487,14 +533,12 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 goto err;
             }
         }
-        usbotghs_set_xmit_fifo(&(src[sent_data]), residual_size, ep_id);
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         usbotghs_write_epx_fifo(residual_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         //usbotghs_wait_for_xmit_complete(ep);
 
-        sent_data += residual_size;
         residual_size = 0;
     }
 

@@ -238,7 +238,7 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     if (size > (ep->fifo_size - ep->fifo_idx)) {
-        printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo_size, ep->fifo_idx);
+        printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo: 0x%x, fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo, ep->fifo_size, ep->fifo_idx);
         /* Why reading 0 bytes from Core FIFO ? */
         errcode = MBED_ERROR_INVPARAM;
         goto err;
@@ -288,8 +288,8 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     ep->fifo_lck = true;
-    usbotghs_write_core_fifo(ep->fifo, size, ep->id);
-    ep->fifo_idx = 0;
+    usbotghs_write_core_fifo(&(ep->fifo[ep->fifo_idx]), size, ep->id);
+    ep->fifo_idx += size;
     ep->fifo_lck = false;
 err:
     return errcode;
