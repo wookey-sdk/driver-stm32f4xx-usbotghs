@@ -28,18 +28,6 @@
 #include "autoconf.h"
 
 
-/*
- * EP name abstraction
- */
-#define EP0 USBOTG_HS_EP0
-#define EP1 USBOTG_HS_EP1
-#define EP2 USBOTG_HS_EP2
-#define EP3 USBOTG_HS_EP3
-#define EP4 USBOTG_HS_EP4
-#define EP5 USBOTG_HS_EP5
-#define EP6 USBOTG_HS_EP6
-#define EP7 USBOTG_HS_EP7
-
 #define MAX_DATA_PACKET_SIZE(ep) (((ep) == 0) ? 64 : 512)
 
 

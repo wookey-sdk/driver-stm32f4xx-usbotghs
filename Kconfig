@@ -6,7 +6,7 @@ config USR_DRV_USBOTGHS
 
 if USR_DRV_USBOTGHS
 
-menu "USB-related features"
+menu "USB-HS related features"
 
 choice
    prompt "USBOTG HS driver mode"

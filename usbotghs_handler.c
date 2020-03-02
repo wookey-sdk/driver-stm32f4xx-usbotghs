@@ -661,7 +661,7 @@ static mbed_error_t rxflvl_handler(void)
         switch (pktsts.devsts) {
             case PKT_STATUS_GLOBAL_OUT_NAK:
                 {
-                    if (epnum != EP0) {
+                    if (epnum != USBOTG_HS_EP0) {
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
                     }
@@ -703,7 +703,7 @@ static mbed_error_t rxflvl_handler(void)
                         usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                     }
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
-                    if (epnum == EP0) {
+                    if (epnum == USBOTG_HS_EP0) {
                         if (ctx->out_eps[epnum].fifo_idx < ctx->out_eps[epnum].fifo_size) {
                             /* rise oepint to permit refragmentation at oepint layer */
                             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epnum), 1, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epnum), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epnum));
@@ -727,7 +727,7 @@ static mbed_error_t rxflvl_handler(void)
             case PKT_STATUS_SETUP_TRANS_COMPLETE:
                 {
                     log_printf("[USB HS][RXFLVL] Setup Transfer complete on ep %d (bcnt %d)\n", epnum, bcnt);
-                    if (epnum != EP0 || bcnt != 0) {
+                    if (epnum != USBOTG_HS_EP0 || bcnt != 0) {
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
                     }
@@ -738,7 +738,7 @@ static mbed_error_t rxflvl_handler(void)
             case PKT_STATUS_SETUP_PKT_RECEIVED:
                 {
                     log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
-                    if (epnum != EP0) {
+                    if (epnum != USBOTG_HS_EP0) {
 
                         uint8_t buf[16];
                         for (; bcnt > 16; bcnt -= 16) {
