@@ -103,50 +103,9 @@ typedef enum {
 } usbotghs_int_id_t;
 
 
-static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
 
 static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
-/* This table is made only as a debug helper, in order to assicate the
- * interrupt identifier with a full-text name for pretty printing.
- * This consume space in the device flash memory and should be used only
- * for debug purpose.
- */
-static const char *usbotghs_int_name[] = {
-    "CMOD",
-    "MMIS",
-    "OTGINT",
-    "SOF",
-    "RXFLVL",
-    "NPTXE",
-    "GINAKEFF",
-    "GONAKEFF",
-    "RESERVED8",
-    "RESERVED9",
-    "ESUSP",
-    "USBSUSP",
-    "USBRST",
-    "ENUMDNE",
-    "ISOODRP",
-    "EOPF",
-    "RESERVED16",
-    "EPMISM",
-    "IEPINT",
-    "OEPINT",
-    "IISOIXFR",
-    "IPXFR",
-    "RESERVED22",
-    "RESERVED23",
-    "HPRTINT",
-    "HCINTT",
-    "PTXFE",
-    "RESERVED27",
-    "CIDSCHG",
-    "DISCINT",
-    "SRQINT",
-    "WKUPINT",
-};
-
 
 
 #endif
@@ -909,17 +868,12 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
          */
         if (val & 1)
         {
-            usbotghs_int_cnt[i]++;
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
             usbotghs_int_cnt[i]++;
 #endif
             /* INFO: as log_printf is a *macro* only resolved by cpp in debug mode,
              * usbotghs_int_name is accedded only in this mode. There is no
              * invalid memory access in the other case. */
-            if (i != 3) {
-                /* 3 is for SOF (Start Of Frame, and is too frequent, generating ISR exhausting */
-                log_printf("[USB HS] IRQ Handler for event %d (%s)\n", i, usbotghs_int_name[i]);
-            }
             usb_otg_hs_isr_handlers[i]();
         }
     }

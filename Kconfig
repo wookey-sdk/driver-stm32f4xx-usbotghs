@@ -34,7 +34,7 @@ config USR_DRV_USBOTGHS_DEBUG
 
 
 config USR_DEV_USBOTGHS_DMA
-  bool "Enable DMA-based transmissions"
+  bool "Enable DMA-based transmissions (UNSTABLE)"
   default n
   ---help---
   Activate DMA-based memory copy between device and RAM FIFOs

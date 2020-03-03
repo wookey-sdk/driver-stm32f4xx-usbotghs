@@ -46,6 +46,7 @@
 #define SETUP		0x06
 
 #define USB_REG_CHECK_TIMEOUT 50
+#define MAX_EPx_PKT_SIZE 512
 
 #define USBOTG_HS_RX_FIFO_SZ 	512
 #define USBOTG_HS_TX_FIFO_SZ	512
@@ -362,6 +363,17 @@ reset ? */
 err:
     return errcode;
 }
+
+/*
+ * Returns, for the current IP, the max data endpoint (not control) packet size
+ * supported
+ */
+uint32_t usbotghs_get_ep_mpsize(void)
+{
+    return MAX_EPx_PKT_SIZE;
+}
+
+
 
 /*
  * Sending data put content in the USB OTG FIFO and ask the EP to read from it to
