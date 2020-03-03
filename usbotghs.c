@@ -681,6 +681,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             }
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
+            break;
         default:
             errcode = MBED_ERROR_INVPARAM;
             goto err;
@@ -713,17 +714,6 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 errcode = MBED_ERROR_INVSTATE;
                 goto err;
             }
-#if 0
-            /* wait for end of current transmission */
-            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_EPENA_Msk, USBOTG_HS_DIEPCTL_EPENA_Pos))  {
-                if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
-                    log_printf("[USBOTG][HS] HANG! DIEPCTL:EPENA\n");
-                    errcode = MBED_ERROR_BUSY;
-                    goto err;
-                }
-            }
-#endif
-
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
             break;
         case USBOTG_HS_EP_DIR_OUT:
@@ -738,17 +728,6 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 errcode = MBED_ERROR_INVSTATE;
                 goto err;
             }
-#if 0
-            /* wait for end of current transmission */
-            while (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {
-                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
-                    log_printf("[USBOTG][HS] HANG! DOEPCTL:EPENA\n");
-                    errcode = MBED_ERROR_BUSY;
-                    goto err;
-                }
-            }
-#endif
-
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
             break;
         default:
@@ -825,6 +804,7 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
             }
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPDIS_Msk);
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_STALL_Msk);
+            break;
         default:
             errcode = MBED_ERROR_INVPARAM;
             goto err;
