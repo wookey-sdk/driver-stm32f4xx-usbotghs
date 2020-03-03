@@ -1,5 +1,6 @@
 config USR_DRV_USBOTGHS
   bool  "userspace USB OTG HS driver library"
+  select USR_DRV_USB_HS
   default y
   ---help---
   Support for STM32 USB OTG HS.
@@ -7,6 +8,9 @@ config USR_DRV_USBOTGHS
 if USR_DRV_USBOTGHS
 
 menu "USB-HS related features"
+
+config USR_DRV_USB_HS
+      bool
 
 choice
    prompt "USBOTG HS driver mode"
