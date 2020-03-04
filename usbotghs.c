@@ -28,6 +28,7 @@
 #include "libc/nostd.h"
 #include "libc/string.h"
 #include "generated/usb_otg_hs.h"
+#include "libs/usbctrl/api/libusbctrl.h"
 
 #include "api/libusbotghs.h"
 #include "usbotghs.h"
@@ -1049,3 +1050,50 @@ usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir)
     }
     return USBOTG_HS_EP_STATE_INVALID;
 }
+
+/*
+ * About generic part:
+ * This part translate libusbctrl forward-declaration symbols to local symbols.
+ * This permits to resolve all symbols of the libctrl abstraction layer into this
+ * very driver one.
+ * WARNING: this method has one single restriction: only one driver can be used
+ * at a time by a given ELF binary (i.e. an application), as symbols are resolved
+ * at link time.
+ */
+mbed_error_t usb_backend_drv_configure(usb_backend_drv_mode_t mode,
+                                       usb_backend_drv_ioep_handler_t ieph,
+                                       usb_backend_drv_ioep_handler_t oeph)
+    __attribute__ ((alias("usbotghs_configure")));
+
+mbed_error_t usb_backend_drv_declare(void)
+    __attribute__ ((alias("usbotghs_declare")));
+mbed_error_t usb_backend_drv_activate_endpoint(uint8_t               id,
+                                         usb_backend_drv_ep_dir_t     dir)
+    __attribute__ ((alias("usbotghs_activate_endpoint")));
+mbed_error_t usb_backend_drv_configure_endpoint(uint8_t               ep,
+                                         usb_backend_drv_ep_type_t    type,
+                                         usb_backend_drv_ep_dir_t     dir,
+                                         usb_backend_drv_epx_mpsize_t mpsize,
+                                         usb_backend_drv_ep_toggle_t  dtoggle,
+                                         usb_backend_drv_ioep_handler_t handler)
+    __attribute__ ((alias("usbotghs_configure_endpoint")));
+
+mbed_error_t usb_backend_drv_get_ep_state(uint8_t epnum, usb_backend_drv_ep_dir_t dir)
+    __attribute__ ((alias("usbotghs_get_ep_state")));
+mbed_error_t usb_backend_drv_send_data(uint8_t *src, uint32_t size, uint8_t ep)
+    __attribute__ ((alias("usbotghs_send_data")));
+mbed_error_t usb_backend_drv_send_zlp(uint8_t ep)
+    __attribute__ ((alias("usbotghs_send_zlp")));
+void         usb_backend_drv_set_address(uint16_t addr)
+    __attribute__ ((alias("usbotghs_set_address")));
+/* USB protocol standard handshaking */
+mbed_error_t usb_backend_drv_ack(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
+    __attribute__ ((alias("usbotghs_endpoint_clear_nak")));
+mbed_error_t usb_backend_drv_nak(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
+    __attribute__ ((alias("usbotghs_endpoint_set_nak")));
+mbed_error_t usb_backend_drv_stall(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
+    __attribute__ ((alias("usbotghs_endpoint_stall")));
+
+uint32_t usb_backend_get_ep_mpsize(void) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
+
+
