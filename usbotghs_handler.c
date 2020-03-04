@@ -542,6 +542,7 @@ static mbed_error_t iepint_handler(void)
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
 #else
         /* here, this is a 'data received' interrupt  (Host mode) */
+        diepintx = 0;
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
         for (uint8_t i = 0; i < 16; ++i) {
@@ -739,10 +740,10 @@ static mbed_error_t rxflvl_handler(void)
                 break;
         }
 
+err:
 #else
         /* TODO: handle Host mode RXFLVL behavior */
 #endif
-err:
 	set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_RXFLVLM);
     return errcode;
 }

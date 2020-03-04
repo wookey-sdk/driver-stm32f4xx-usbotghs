@@ -477,14 +477,14 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
             USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
             USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
     } else {
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid),
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
                 1,
-                USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid),
-                USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid),
+                USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),
+                USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
+        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),
                 ep->mpsize,
-                USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid),
-                USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(epid));
+                USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),
+                USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
     }
     ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
 #endif
