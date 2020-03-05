@@ -38,8 +38,8 @@ typedef mbed_error_t (*usbotghs_ioep_handler_t)(uint32_t dev_id, uint32_t size, 
  * by software stack. This enumerate define which mode to use
  */
 typedef enum {
-    USBOTGHS_MODE_HOST,
-    USBOTGHS_MODE_DEVICE
+    USBOTGHS_MODE_HOST = 0,
+    USBOTGHS_MODE_DEVICE = 1
 } usbotghs_dev_mode_t;
 
 /*
