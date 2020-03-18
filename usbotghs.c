@@ -1024,6 +1024,93 @@ mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep)
     return errcode;
 }
 
+/* disable (temporary) a given Endpoint (no more data is received or sent) */
+mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
+                                       usbotghs_ep_dir_t     dir)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_ep_t *ep = NULL;
+
+    printf("[USBOTGHS] disable EP %d: dir %d\n", ep_id, dir);
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            if (ep_id > USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            ep = &(ctx->in_eps[ep_id]);
+            break;
+        case USBOTG_HS_EP_DIR_OUT:
+            if (ep_id > USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            ep = &(ctx->in_eps[ep_id]);
+            break;
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+            break;
+    }
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), 0x1,
+            USBOTG_HS_DIEPCTL_EPDIS_Msk,
+            USBOTG_HS_DIEPCTL_EPDIS_Pos);
+
+err:
+    return errcode;
+
+}
+
+/* enable a previously disabled Endpoint */
+mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
+                                      usbotghs_ep_dir_t     dir)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_ep_t *ep = NULL;
+
+    printf("[USBOTGHS] enable EP %d: dir %d\n", ep_id, dir);
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /* sanitize */
+    if (ctx == NULL) {
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
+    switch (dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            if (ep_id > USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            ep = &(ctx->in_eps[ep_id]);
+            break;
+        case USBOTG_HS_EP_DIR_OUT:
+            if (ep_id > USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            ep = &(ctx->in_eps[ep_id]);
+            break;
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+            break;
+    }
+    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), 0x0,
+            USBOTG_HS_DIEPCTL_EPDIS_Msk,
+            USBOTG_HS_DIEPCTL_EPDIS_Pos);
+err:
+    return errcode;
+
+
+}
+
+
 void usbotghs_set_address(uint16_t addr)
 {
     set_reg(r_CORTEX_M_USBOTG_HS_DCFG, addr, USBOTG_HS_DCFG_DAD);
@@ -1051,6 +1138,10 @@ usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir)
     return USBOTG_HS_EP_STATE_INVALID;
 }
 
+usbotghs_port_speed_t usbotghs_get_speed(void)
+{
+    return USBOTG_HS_PORT_HIGHSPEED;
+}
 /*
  * About generic part:
  * This part translate libusbctrl forward-declaration symbols to local symbols.
@@ -1093,7 +1184,12 @@ mbed_error_t usb_backend_drv_nak(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
     __attribute__ ((alias("usbotghs_endpoint_set_nak")));
 mbed_error_t usb_backend_drv_stall(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
     __attribute__ ((alias("usbotghs_endpoint_stall")));
+mbed_error_t usb_backend_drv_endpoint_disable(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
+    __attribute__ ((alias("usbotghs_endpoint_disable")));
+mbed_error_t usb_backend_drv_endpoint_enable(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
+    __attribute__ ((alias("usbotghs_endpoint_enable")));
 
 uint32_t usb_backend_get_ep_mpsize(void) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
+usb_backend_drv_port_speed_t usb_backend_drv_get_speed(void) __attribute__ ((alias("usbotghs_get_speed")));
 
 

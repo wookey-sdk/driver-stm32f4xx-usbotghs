@@ -33,6 +33,12 @@
 
 typedef mbed_error_t (*usbotghs_ioep_handler_t)(uint32_t dev_id, uint32_t size, uint8_t ep);
 
+typedef enum {
+    USBOTG_HS_PORT_LOWSPEED = 0,
+    USBOTG_HS_PORT_FULLSPEED = 1,
+    USBOTG_HS_PORT_HIGHSPEED = 2
+} usbotghs_port_speed_t;
+
 /*
  * The USB OTG support On-The-Go configuration (i.e. Host or Device mode, configurable
  * by software stack. This enumerate define which mode to use
@@ -280,6 +286,20 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               id,
 mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep,
                                           usbotghs_ep_dir_t     dir);
 
+/*
+ * Temporarily disable Endpoint (Endpoint is not deconfigured but neither emit
+ * nor receive data (including IN Token or OUT handshakes)
+ */
+mbed_error_t usbotghs_endpoint_disable(uint8_t ep,
+                                       usbotghs_ep_dir_t     dir);
+
+
+
+/*
+ * Reenable Endpoint previously disabled
+ */
+mbed_error_t usbotghs_endpoint_enable(uint8_t ep,
+                                      usbotghs_ep_dir_t     dir);
 
 /**
  * usb_driver_set_address - Set the address of the device
@@ -295,6 +315,8 @@ void usbotghs_unbind(void);
 usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir);
 
 uint32_t usbotghs_get_ep_mpsize(void);
+
+usbotghs_port_speed_t usbotgfs_get_speed(void);
 
 
 #endif /*!LIBUSBOTGHS_H_ */

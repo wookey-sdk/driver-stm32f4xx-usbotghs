@@ -201,8 +201,17 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
         } else {
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ctx->fifo_idx, USBOTG_HS_DIEPTXF_INEPTXSA);
             /* this field is in 32bits words unit */
-            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ep->mpsize, USBOTG_HS_DIEPTXF_INEPTXFD);
-            ctx->fifo_idx += ep->mpsize;
+            /* for very small mpsize EP (e.g. keyboards, we must support at list
+             * URB size + mpsize */
+
+            uint32_t fifosize;
+            if (ep->mpsize <= 64) {
+                fifosize = 128;
+            } else {
+                fifosize = ep->mpsize;
+            }
+            set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), fifosize, USBOTG_HS_DIEPTXF_INEPTXFD);
+            ctx->fifo_idx += fifosize;
         }
     }
     ep->fifo_idx = 0;
