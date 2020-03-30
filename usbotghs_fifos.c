@@ -105,10 +105,10 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
          * the switch/case breaks. Do not re-add it ! */
         case 3:
             tmp = ((const uint8_t*) src)[2] << 16;
-            __attribute__ ((fallthrough));
+            __explicit_fallthrough
         case 2:
             tmp |= ((const uint8_t*) src)[1] << 8;
-            __attribute__ ((fallthrough));
+            __explicit_fallthrough
         case 1:
             tmp  |= ((const uint8_t*) src)[0];
             write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
