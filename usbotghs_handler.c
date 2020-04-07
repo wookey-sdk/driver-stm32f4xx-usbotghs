@@ -371,8 +371,8 @@ static mbed_error_t oepint_handler(void)
                     if (end_of_transfer == true && ep_id == 0) {
                         /* We synchronously handle CNAK only for EP0 data. others EP are handled by dedicated upper layer
                          * class level handlers */
-                        log_printf("[USBOTG][HS] oepint: set CNAK (end of transfer)\n");
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                        //log_printf("[USBOTG][HS] oepint: set CNAK (end of transfer)\n");
+                        //set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                     }
                 }
                 /* XXX: only if SNAK set */
@@ -661,7 +661,7 @@ static mbed_error_t rxflvl_handler(void)
                     if (usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum])) != MBED_ERROR_NONE) {
                         /* empty fifo on error */
                         usbotghs_rxfifo_flush(epnum);
-                        usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
+                        usbotghs_endpoint_stall(epnum, USBOTG_HS_EP_DIR_OUT);
                     }
                     ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
                     if (epnum == USBOTG_HS_EP0) {
@@ -669,6 +669,8 @@ static mbed_error_t rxflvl_handler(void)
                             /* rise oepint to permit refragmentation at oepint layer */
                             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epnum), 1, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epnum), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epnum));
                             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epnum), ctx->out_eps[epnum].mpsize, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epnum), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(epnum));
+                        } else {
+                            usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         }
                     }
                     break;

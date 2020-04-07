@@ -138,7 +138,9 @@ mbed_error_t usbotghs_declare(void)
     usbotghs_ctx.dev.irqs[0].posthook.action[2].instr = IRQ_PH_MASK;
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_dest = 0x14; /* MASK register offset */
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_src = 0x14; /* MASK register offset */
-    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_mask = 0x18; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_mask = 0x18; /* MASK re Here, ACK syncrhonously (or not, in main thread for e.g. is under
+                                                                            the responsability of the upper stack implementation, depending
+                                                                            on the way it is written. gister offset */
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.mode = 0; /* no binary inversion */
 
 
@@ -665,6 +667,10 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
     /*
      * FIXME: For IN endpoint, implicit fallthrough to IN+OUT NAK
      * It seems that in the other case, the USB Core stalls.
+     * This behavior may be the consequence of an invalid use of _nak/_ack calls in the
+     * upper stacks. For EP0, though, these two functions must **not** fallthrough and
+     * behave properly, as EP0 is a FULL DUPLEX endpoint. A fallthrough would generate
+     * a border effect on the other direction.
      */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
@@ -686,6 +692,9 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             }
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
+            if (ep_id == 0) {
+                break;
+            }
             __explicit_fallthrough
         case USBOTG_HS_EP_DIR_OUT:
             if (ep_id >= USBOTGHS_MAX_OUT_EP) {
@@ -729,6 +738,10 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
     /*
      * FIXME: For IN endpoint, implicit fallthrough to IN+OUT ACK
      * It seems that in the other case, the USB Core stalls.
+     * This behavior may be the consequence of an invalid use of _nak/_ack calls in the
+     * upper stacks. For EP0, though, these two functions must **not** fallthrough and
+     * behave properly, as EP0 is a FULL DUPLEX endpoint. A fallthrough would generate
+     * a border effect on the other direction.
      */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
@@ -744,6 +757,9 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 goto err;
             }
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
+            if (ep_id == 0) {
+                break;
+            }
             __explicit_fallthrough
         case USBOTG_HS_EP_DIR_OUT:
             log_printf("[USBOTG][HS] CNAK on OUT ep %d\n", ep_id);
