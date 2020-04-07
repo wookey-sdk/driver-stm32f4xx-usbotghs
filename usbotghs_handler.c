@@ -516,7 +516,7 @@ static mbed_error_t iepint_handler(void)
                             ctx->in_eps[ep_id].fifo_size = 0;
                         }
                     } else {
-                        log_printf("[USBOTGHS] EP not in DATA_IN state ???\n");
+                        log_printf("[USBOTGHS] EP %d not in DATA_IN state ???\n", ep_id);
                         /* the EP is only set as IDLE to inform the send process
                          * that the FIFO content is effectively sent */
                         /* clear current FIFO, now that content is sent */

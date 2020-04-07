@@ -661,6 +661,11 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+
+    /*
+     * FIXME: For IN endpoint, implicit fallthrough to IN+OUT NAK
+     * It seems that in the other case, the USB Core stalls.
+     */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             if (ep_id >= USBOTGHS_MAX_IN_EP) {
@@ -681,7 +686,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             }
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
-            break;
+            __explicit_fallthrough
         case USBOTG_HS_EP_DIR_OUT:
             if (ep_id >= USBOTGHS_MAX_OUT_EP) {
                 errcode = MBED_ERROR_INVPARAM;
@@ -721,6 +726,10 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
         goto err;
     }
 
+    /*
+     * FIXME: For IN endpoint, implicit fallthrough to IN+OUT ACK
+     * It seems that in the other case, the USB Core stalls.
+     */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             log_printf("[USBOTG][HS] CNAK on IN ep %d\n", ep_id);
@@ -735,7 +744,7 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 goto err;
             }
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
-            break;
+            __explicit_fallthrough
         case USBOTG_HS_EP_DIR_OUT:
             log_printf("[USBOTG][HS] CNAK on OUT ep %d\n", ep_id);
             if (ep_id >= USBOTGHS_MAX_OUT_EP) {
