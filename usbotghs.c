@@ -138,7 +138,9 @@ mbed_error_t usbotghs_declare(void)
     usbotghs_ctx.dev.irqs[0].posthook.action[2].instr = IRQ_PH_MASK;
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_dest = 0x14; /* MASK register offset */
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_src = 0x14; /* MASK register offset */
-    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_mask = 0x18; /* MASK register offset */
+    usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.offset_mask = 0x18; /* MASK re Here, ACK syncrhonously (or not, in main thread for e.g. is under
+                                                                            the responsability of the upper stack implementation, depending
+                                                                            on the way it is written. gister offset */
     usbotghs_ctx.dev.irqs[0].posthook.action[2].mask.mode = 0; /* no binary inversion */
 
 
@@ -397,13 +399,13 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     if (!ep->configured) {
         log_printf("[USBOTG][HS] ep %d not configured\n", ep->id);
         errcode = MBED_ERROR_INVSTATE;
-        goto err;
+        goto err_init;
     }
     fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
     /* configure EP FIFO internal informations */
     if ((errcode = usbotghs_set_xmit_fifo(src, size, ep_id)) != MBED_ERROR_NONE) {
        log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
-        goto err;
+        goto err_init;
     }
     /*
      * Here, we have to split the src content, taking into account the
@@ -457,11 +459,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
                 USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
     }
+    ep->state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
     /* 2. Enable endpoint for transmission. */
     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
             USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
 
-    ep->state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
 #else
     /* EP 0 is not able to handle more than one packet of mpsize size per transfer. For bigger
      * transfers, the driver must fragment data transfer transparently */
@@ -505,6 +507,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 goto err;
             }
         }
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+        ep->state = USBOTG_HS_EP_STATE_DATA_IN;
+#else
+        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+#endif
         /* write data from SRC to FIFO */
         usbotghs_write_epx_fifo(ep->mpsize, ep);
         goto err;
@@ -528,6 +535,14 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 goto err;
             }
         }
+        if (residual_size == fifo_size) {
+            /* last block, no more WIP */
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+            ep->state = USBOTG_HS_EP_STATE_DATA_IN;
+#else
+            ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+#endif
+        }
         /* write data from SRC to FIFO */
         usbotghs_write_epx_fifo(fifo_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
@@ -546,6 +561,12 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 goto err;
             }
         }
+        /* last block, no more WIP */
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+        ep->state = USBOTG_HS_EP_STATE_DATA_IN;
+#else
+        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+#endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         usbotghs_write_epx_fifo(residual_size, ep);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
@@ -557,15 +578,14 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
     if(get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)) {
         errcode = MBED_ERROR_BUSY;
+        goto err;
     }
+    return errcode;
 err:
     /* From whatever we come from to this point, the current transfer is complete
      * (with failure or not on upper level). IEPINT can inform the upper layer */
-#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-        ep->state = USBOTG_HS_EP_STATE_DATA_IN;
-#else
-        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
-#endif
+    ep->state = USBOTG_HS_EP_STATE_IDLE;
+err_init:
     return errcode;
 }
 
@@ -643,6 +663,15 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+
+    /*
+     * FIXME: For IN endpoint, implicit fallthrough to IN+OUT NAK
+     * It seems that in the other case, the USB Core stalls.
+     * This behavior may be the consequence of an invalid use of _nak/_ack calls in the
+     * upper stacks. For EP0, though, these two functions must **not** fallthrough and
+     * behave properly, as EP0 is a FULL DUPLEX endpoint. A fallthrough would generate
+     * a border effect on the other direction.
+     */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             if (ep_id >= USBOTGHS_MAX_IN_EP) {
@@ -663,7 +692,10 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             }
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
-            break;
+            if (ep_id == 0) {
+                break;
+            }
+            __explicit_fallthrough
         case USBOTG_HS_EP_DIR_OUT:
             if (ep_id >= USBOTGHS_MAX_OUT_EP) {
                 errcode = MBED_ERROR_INVPARAM;
@@ -703,6 +735,14 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
         goto err;
     }
 
+    /*
+     * FIXME: For IN endpoint, implicit fallthrough to IN+OUT ACK
+     * It seems that in the other case, the USB Core stalls.
+     * This behavior may be the consequence of an invalid use of _nak/_ack calls in the
+     * upper stacks. For EP0, though, these two functions must **not** fallthrough and
+     * behave properly, as EP0 is a FULL DUPLEX endpoint. A fallthrough would generate
+     * a border effect on the other direction.
+     */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             log_printf("[USBOTG][HS] CNAK on IN ep %d\n", ep_id);
@@ -717,7 +757,10 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 goto err;
             }
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
-            break;
+            if (ep_id == 0) {
+                break;
+            }
+            __explicit_fallthrough
         case USBOTG_HS_EP_DIR_OUT:
             log_printf("[USBOTG][HS] CNAK on OUT ep %d\n", ep_id);
             if (ep_id >= USBOTGHS_MAX_OUT_EP) {
