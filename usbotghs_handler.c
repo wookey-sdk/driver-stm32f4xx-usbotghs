@@ -25,6 +25,7 @@
 #include "libc/regutils.h"
 #include "libc/types.h"
 #include "libc/stdio.h"
+#include "libc/sanhandlers.h"
 
 #include "api/libusbotghs.h"
 #include "usbotghs_regs.h"
@@ -366,6 +367,10 @@ static mbed_error_t oepint_handler(void)
                 }
                 if (callback_to_call == true) {
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
+                    if (handler_sanity_check((void*)ctx->out_eps[ep_id].handler)) {
+                        sys_exit();
+                        goto err;
+                    }
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
                     if (end_of_transfer == true && ep_id == 0) {
@@ -401,6 +406,7 @@ static mbed_error_t oepint_handler(void)
             val = val << 1;
         }
 #endif
+err:
     return errcode;
 }
 
@@ -510,6 +516,10 @@ static mbed_error_t iepint_handler(void)
                             /* now EP is idle */
                             ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                             /* inform libctrl of transfert complete */
+                            if (handler_sanity_check((void*)ctx->in_eps[ep_id].handler)) {
+                                sys_exit();
+                                goto err;
+                            }
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
@@ -559,6 +569,7 @@ static mbed_error_t iepint_handler(void)
         }
 #endif
     /* calling upper handler... needed ? */
+err:
     return errcode;
 }
 
