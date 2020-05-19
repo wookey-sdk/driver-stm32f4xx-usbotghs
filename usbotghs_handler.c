@@ -367,8 +367,7 @@ static mbed_error_t oepint_handler(void)
                 }
                 if (callback_to_call == true) {
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
-                    if (handler_sanity_check((void*)ctx->out_eps[ep_id].handler)) {
-                        sys_exit();
+                    if (handler_sanity_check_with_panic((physaddr_t)ctx->out_eps[ep_id].handler)) {
                         goto err;
                     }
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
@@ -516,8 +515,7 @@ static mbed_error_t iepint_handler(void)
                             /* now EP is idle */
                             ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
                             /* inform libctrl of transfert complete */
-                            if (handler_sanity_check((void*)ctx->in_eps[ep_id].handler)) {
-                                sys_exit();
+                            if (handler_sanity_check((physaddr_t)ctx->in_eps[ep_id].handler)) {
                                 goto err;
                             }
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
