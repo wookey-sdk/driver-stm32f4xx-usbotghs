@@ -95,9 +95,17 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
     set_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK, 0, 0xffffffff, 0);
 
     /* manual copy to Core FIFO */
+    /* there is no overflow on src here, as the C divisor is natural integer
+     * divisor, truncating the divised size value to the first integer below
+     */
     for (uint32_t i = 0; i < size_4bytes; i++, src += 4){
-        write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), *(const uint32_t *)src);
+        tmp = src[0];
+        tmp |= src[1] << 8;
+        tmp |= src[2] << 16;
+        tmp |= src[3] << 24;
+        write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
     }
+    tmp = 0;
     switch (size & 3) {
         /* sequencialy write up to 3 bytes into tmp (depending on the carry)
          * and write tmp to Core FIFO
