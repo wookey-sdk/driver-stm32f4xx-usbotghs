@@ -895,6 +895,10 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             log_printf("[USBOTGHS] enable EP %d: dir IN, mpsize %d, type %x\n", ep, mpsize, type);
+            if (ep >= USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_NOSTRAGE;
+                goto err;
+            }
 
             ctx->in_eps[ep].id = ep;
             ctx->in_eps[ep].dir = dir;
@@ -903,7 +907,9 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->in_eps[ep].type = type;
             ctx->in_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
             ctx->in_eps[ep].handler = handler;
-            ctx->out_eps[ep].configured = false;
+            if (ep <= USBOTGHS_MAX_OUT_EP) {
+                ctx->out_eps[ep].configured = false;
+            }
 
             /* set EP configuration */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), type,
@@ -928,6 +934,12 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             break;
         case USBOTG_HS_EP_DIR_OUT:
             log_printf("[USBOTGHS] enable EP %d: dir OUT, mpsize %d, type %x\n", ep, mpsize, type);
+
+            if (ep >= USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_NOSTRAGE;
+                goto err;
+            }
+
             ctx->out_eps[ep].id = ep;
             ctx->out_eps[ep].dir = dir;
             ctx->out_eps[ep].configured = true;
@@ -935,7 +947,9 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->out_eps[ep].type = type;
             ctx->out_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
             ctx->out_eps[ep].handler = handler;
-            ctx->in_eps[ep].configured = false;
+            if (ep <= USBOTGHS_MAX_IN_EP) {
+                ctx->in_eps[ep].configured = false;
+            }
 
             /* Maximum packet size */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
