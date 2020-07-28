@@ -35,6 +35,9 @@
 #include "generated/usb_otg_hs.h"
 #include "usbotghs_handler.h"
 
+/* Hardware IP FIFO size */
+#define CORE_FIFO_LENGTH 4096
+
 void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile const uint32_t size, uint8_t ep)
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
@@ -189,9 +192,14 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
          *  FIXME: this work is not made in the previous driver... Maybe we should correct this here.
          */
 
+        if (ctx->fifo_idx + USBOTG_HS_TX_CORE_FIFO_SZ >= CORE_FIFO_LENGTH) {
+            errcode = MBED_ERROR_NOSTORAGE;
+            goto err;
+        }
 
         /*
          */
+        /* FIXME: DIEPTXF fifo size is in word unit, shouldn't it be fifo_idx/4 ? see USBOTGFS driver */
         set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, USBOTG_HS_RX_CORE_FIFO_SZ, USBOTG_HS_DIEPTXF_INEPTXSA);
         set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF0, USBOTG_HS_TX_CORE_FIFO_SZ, USBOTG_HS_DIEPTXF_INEPTXFD);
         /*
@@ -209,6 +217,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
         if (ep->dir == USBOTG_HS_EP_DIR_OUT) {
             /* using global RX fifo... GRXFIFOSZ set as global RX FIFO */
         } else {
+            /* FIXME: DIEPTXF fifo size is in word unit, shouldn't it be fifo_idx/4 ? */
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ctx->fifo_idx, USBOTG_HS_DIEPTXF_INEPTXSA);
             /* this field is in 32bits words unit */
             /* for very small mpsize EP (e.g. keyboards, we must support at list
@@ -220,6 +229,13 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
             } else {
                 fifosize = ep->mpsize;
             }
+
+
+            if (ctx->fifo_idx + fifosize >= CORE_FIFO_LENGTH) {
+                errcode = MBED_ERROR_NOSTORAGE;
+                goto err;
+            }
+
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), fifosize, USBOTG_HS_DIEPTXF_INEPTXFD);
             ctx->fifo_idx += fifosize;
         }
