@@ -217,7 +217,6 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
         if (ep->dir == USBOTG_HS_EP_DIR_OUT) {
             /* using global RX fifo... GRXFIFOSZ set as global RX FIFO */
         } else {
-            /* FIXME: DIEPTXF fifo size is in word unit, shouldn't it be fifo_idx/4 ? */
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), ctx->fifo_idx, USBOTG_HS_DIEPTXF_INEPTXSA);
             /* this field is in 32bits words unit */
             /* for very small mpsize EP (e.g. keyboards, we must support at list
@@ -236,6 +235,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
                 goto err;
             }
 
+            /* FIXME: DIEPTXF fifo size is in word unit, shouldn't it be fifosize/4 ? */
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), fifosize, USBOTG_HS_DIEPTXF_INEPTXFD);
             ctx->fifo_idx += fifosize;
         }
