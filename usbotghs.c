@@ -896,7 +896,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
         case USBOTG_HS_EP_DIR_IN:
             log_printf("[USBOTGHS] enable EP %d: dir IN, mpsize %d, type %x\n", ep, mpsize, type);
             if (ep >= USBOTGHS_MAX_IN_EP) {
-                errcode = MBED_ERROR_NOSTRAGE;
+                errcode = MBED_ERROR_NOSTORAGE;
                 goto err;
             }
 
@@ -936,7 +936,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             log_printf("[USBOTGHS] enable EP %d: dir OUT, mpsize %d, type %x\n", ep, mpsize, type);
 
             if (ep >= USBOTGHS_MAX_OUT_EP) {
-                errcode = MBED_ERROR_NOSTRAGE;
+                errcode = MBED_ERROR_NOSTORAGE;
                 goto err;
             }
 
