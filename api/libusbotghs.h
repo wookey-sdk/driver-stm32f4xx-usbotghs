@@ -48,6 +48,11 @@ typedef enum {
     USBOTGHS_MODE_DEVICE = 1
 } usbotghs_dev_mode_t;
 
+/*@
+    predicate is_valid_dev_mode(usbotghs_dev_mode_t i) =
+        i == USBOTGHS_MODE_HOST || i == USBOTGHS_MODE_DEVICE ;
+*/
+
 /*
  * Device Endpoint identifiers
  */
@@ -127,6 +132,10 @@ typedef enum {
     USBOTG_HS_EP_DIR_OUT,
 } usbotghs_ep_dir_t;
 
+
+/*@ predicate is_valid_ep_dir(usbotghs_ep_dir_t i) =
+    i == USBOTG_HS_EP_DIR_IN || i == USBOTG_HS_EP_DIR_OUT;
+*/
 
 /*********************************************************************************
  * About handlers
@@ -316,7 +325,13 @@ usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir);
 
 uint32_t usbotghs_get_ep_mpsize(void);
 
-usbotghs_port_speed_t usbotgfs_get_speed(void);
+usbotghs_port_speed_t usbotghs_get_speed(void);
+
+#if defined(__FRAMAC__)
+/*Cyril : these 2 functions are called by test_fcn_driver_eva, so i need to declare their proto somewhere */
+mbed_error_t usbotghs_enpoint_nak(uint8_t ep) ;
+mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep) ;
+#endif/*__FRAMAC__*/
 
 
 #endif /*!LIBUSBOTGHS_H_ */

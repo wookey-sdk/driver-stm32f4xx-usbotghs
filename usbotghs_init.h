@@ -43,18 +43,38 @@
  * Power-On generic Core initialization, independent of the USB core configuration.
  * This action must be done at USB power-on in any case.
  */
+
+/*@
+    @ requires is_valid_dev_mode(mode);
+    @ assigns \nothing  ;
+    @ ensures \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE ;
+*/
+
 mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode);
 
 /*
  * Device mode core initialization. In this mode, the USB OTG HS Core is configured
  * in device mode.
  */
+
+/*@
+	@ assigns \nothing;
+	@ ensures \result == MBED_ERROR_NONE ;
+@*/
+
 mbed_error_t usbotghs_initialize_device(void);
 
 /*
  * Host mode core initialization. In this mode, the USB OTG HS Core is configured
  * in host mode.
  */
+
+/*@
+	@ assigns \nothing;
+	@ ensures \result == MBED_ERROR_UNSUPORTED_CMD ;
+@*/
+
+
 mbed_error_t usbotghs_initialize_host(void);
 
 #endif/*!USBOTGHS_INIT_H_*/

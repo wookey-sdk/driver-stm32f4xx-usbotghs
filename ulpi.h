@@ -26,6 +26,10 @@
 
 #include "libc/types.h"
 
+/*@
+    @ assigns \nothing ;
+    @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INITFAIL ;
+*/
 mbed_error_t usbotghs_ulpi_reset(void);
 
 #endif/*!ULPI_H_*/

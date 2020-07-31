@@ -28,6 +28,12 @@
 /*
  * Initialize the USB PHY through ULPI interface
  */
+
+/*@
+    @ assigns \nothing ;
+    @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INITFAIL ;
+*/
+
 mbed_error_t usbotghs_ulpi_reset(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
