@@ -38,7 +38,7 @@
 #include "generated/usb_otg_hs.h"
 
 #if defined(__FRAMAC__)
-#include "usbctrl_backend.h"
+#include "api/socs/stm32f439/usbctrl_backend.h"
 #else
 #include "libs/usbctrl/api/libusbctrl.h"
 #endif/*!__FRAMAC__*/
