@@ -609,7 +609,6 @@ err:
 mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-	uint32_t count = 0;
 	/* Select which ep to flush and do it
  	 * This is the FIFO number that must be flushed using the TxFIFO Flush bit.
  	 * This field must not be changed until the core clears the TxFIFO Flush bit.
@@ -619,24 +618,11 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
      * end.
      */
 
-    /*@
-        @ loop invariant 0 <= cpt <= CPT_HARD;
-        @ loop assigns cpt, count;
-        @ loop variant (CPT_HARD - cpt);
-    */
-
-    for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
-        if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
-            if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
-                log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
-                errcode = MBED_ERROR_BUSY;
-                goto err;
-            }
-        //errcode = MBED_ERROR_BUSY;  // cyril : move errcode and goto into if statement
-        //goto err;
-        }
+    if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
+        errcode = MBED_ERROR_BUSY;  // cyril : move errcode and goto into if statement
+        goto err;
     }
-	/*
+    /*
 	 * The application must write this bit only after checking that the core is neither writing to the
 	 * TxFIFO nor reading from the TxFIFO. Verify using these registers:
 	 */
@@ -646,7 +632,6 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
 	/* Write: the AHBIDL bit in OTG_HS_GRSTCTL ensures that the core is not writing anything to the FIFO */
 	set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, ep_id, USBOTG_HS_GRSTCTL_TXFNUM);
 	set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, 1, USBOTG_HS_GRSTCTL_TXFFLSH);
-	count = 0;
     /* wait for fifo flush to be executed */
 
     /*@
@@ -655,6 +640,7 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
         @ loop variant (CPT_HARD - cpt);
     */
 
+#if 1
     for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
         if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)) {
             if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
@@ -663,7 +649,10 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
                 goto err;
             }
         }
+        //errcode = MBED_ERROR_BUSY;
+        //goto err;
     }
+#endif
 
 err:
     return errcode;

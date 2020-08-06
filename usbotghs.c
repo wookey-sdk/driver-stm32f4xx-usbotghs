@@ -1314,8 +1314,6 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
                 ctx->in_eps[ep].configured = false;
             }
 
-            ctx->in_eps[ep].configured = false;
-
 #if defined(__FRAMAC__)
             if(ep > 0){
                 set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
