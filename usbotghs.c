@@ -624,6 +624,15 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
        */
        //PMO ajout compteur matériel
 
+#ifndef __FRAMAC__
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (ep->mpsize / 4)) {
+            if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
+                log_printf("[USBOTG][HS] Suspended!\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        }
+#else
 
        for (uint8_t cpt=0; cpt<CPT_HARD; cpt++)
      {
@@ -636,6 +645,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
          }
        }
      }
+#endif
 
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         ep->state = USBOTG_HS_EP_STATE_DATA_IN;
@@ -667,6 +677,15 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
        */
     //PMO loop assigns pas errcode
     while (residual_size >= fifo_size) {
+#ifndef __FRAMAC__
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (fifo_size / 4)) {
+            if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
+                log_printf("[USBOTG][HS] Suspended!\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        }
+#else
         /*@
            @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
            @ loop invariant 0<=cpt<= CPT_HARD ;
@@ -683,6 +702,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                }
            }
         }
+#endif
 
         if (residual_size == fifo_size) {
             /* last block, no more WIP */
@@ -708,6 +728,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /* Now, if there is residual size shorter than FIFO size, just send it */
     if (residual_size > 0) {
         /* wait while there is enough space in TxFIFO */
+#ifndef __FRAMAC__
+        while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV)  < ((residual_size / 4) + (residual_size & 3 ? 1 : 0))) {
+#else
 
       /*@
     @ loop invariant 0<=cpt<= CPT_HARD ;
@@ -717,12 +740,15 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
       //PMO compteur hardware
       for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
     if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV)  < ((residual_size / 4) + (residual_size & 3 ? 1 : 0))) {
+#endif
             if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
                 log_printf("[USBOTG][HS] Suspended!\n");
                 errcode = MBED_ERROR_BUSY;
                 goto err;
             }
+#ifdef __FRAMAC__
         }
+#endif
       }
         /* last block, no more WIP */
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
