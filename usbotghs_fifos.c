@@ -625,15 +625,16 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
         @ loop variant (CPT_HARD - cpt);
     */
 
-    for(uint8_t cpt=0; cpt<CPT_HARD/4; cpt++){
-    //while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
-        if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
-            log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
-            errcode = MBED_ERROR_BUSY;
-            goto err;
-        }
+    for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
+        if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
+            if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
+                log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
         //errcode = MBED_ERROR_BUSY;  // cyril : move errcode and goto into if statement
         //goto err;
+        }
     }
 	/*
 	 * The application must write this bit only after checking that the core is neither writing to the
@@ -654,12 +655,13 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
         @ loop variant (CPT_HARD - cpt);
     */
 
-    for(uint8_t cpt=0; cpt<CPT_HARD/4; cpt++){
-    //while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)) {
-        if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
-            log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
-            errcode = MBED_ERROR_BUSY;
-            goto err;
+    for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
+        if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)) {
+            if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
+                log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the TxFIFO Flush bit GRSTCTL:TXFFLSH\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
         }
     }
 

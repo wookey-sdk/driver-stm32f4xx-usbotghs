@@ -930,18 +930,18 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             /* wait for end of current transmission */
         /*@
           @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns cpt, count ;
+          @ loop assigns cpt ;
           @ loop variant CPT_HARD - cpt ;
         */
         //PMO compteur hardware
         for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
-          //while (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {  // Cyril : voir avec Philippe comment faire un compteur pour ce while
-                if (++count > USBOTGHS_REG_CHECK_TIMEOUT){
+          if (get_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_EPENA_Msk, USBOTG_HS_DOEPCTL_EPENA_Pos))  {  // Cyril : voir avec Philippe comment faire un compteur pour ce while
+                if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
                       log_printf("[USBOTG][HS] HANG! DOEPCTL:EPENA\n");
                       errcode = MBED_ERROR_BUSY;
                       goto err;
                 }
-          //}
+          }
         }
 
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DIEPCTL_SNAK_Msk);
@@ -1293,7 +1293,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             /* Enable endpoint */
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), USBOTG_HS_DIEPCTL_USBAEP_Msk);
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), ep, USBOTG_HS_DIEPCTL_CNAK);
-            set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_IEPINT_Msk);
+            //PTH: set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_IEPINT_Msk);
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DAINTMSK, USBOTG_HS_DAINTMSK_IEPM(ep));
             break;
         case USBOTG_HS_EP_DIR_OUT:
