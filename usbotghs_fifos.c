@@ -636,11 +636,9 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
 
     /*@
         @ loop invariant 0 <= cpt <= CPT_HARD;
-        @ loop assigns cpt, count;
+        @ loop assigns cpt;
         @ loop variant (CPT_HARD - cpt);
     */
-
-#if 1
     for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
         if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)) {
             if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
@@ -652,7 +650,6 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
         //errcode = MBED_ERROR_BUSY;
         //goto err;
     }
-#endif
 
 err:
     return errcode;
