@@ -449,22 +449,12 @@ err:
     @ requires epid < USBOTGHS_MAX_OUT_EP ; // Cyril : respect du contexte appelant garantit cette propriété
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
 
-    @ behavior not_configured:
-    @   assumes ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))  ;
-    @   ensures \result == MBED_ERROR_INVPARAM ;
+    @   ensures \result == MBED_ERROR_INVPARAM
+    ==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
+     || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
 
-    @ behavior bad_size:
-    @   assumes !((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) ;
-    @   assumes size == 0 ;
-    @   ensures \result == MBED_ERROR_INVPARAM ;
-
-    @ behavior ok:
-    @   assumes !((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) ;
-    @   assumes size != 0 ;
-    @   ensures \result == MBED_ERROR_NONE ;
-
-    @ complete behaviors;
-    @ disjoint behaviors ;
+    @   ensures \result == MBED_ERROR_NONE
+    ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
 
 */
 
@@ -502,6 +492,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     }
 #endif
     /* set RAM FIFO for current EP. */
+
     ep->fifo = dst;
     ep->fifo_idx = 0;
     ep->fifo_size = size;
@@ -533,6 +524,8 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     /* FIFO is now configured */
     /* CNAK is done by endpoint activation */
 err:
+    /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ; */
+// Cyril : without this assert, global ensures about MBED_ERROR_NONE is not prooved
     return errcode;
 }
 
