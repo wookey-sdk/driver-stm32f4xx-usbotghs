@@ -137,15 +137,12 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
     */
 
     for (uint32_t i = 0; i < size_4bytes; i++, src += 4){
-        //write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), *(const uint32_t *)src); // RTE here because of the cast
-
         tmp = src[0];
         tmp |= (uint32_t)(src[1] & 0xff) << 8;
         tmp |= (uint32_t)(src[2] & 0xff) << 16;
         tmp |= (uint32_t)(src[3] & 0xff) << 24;
-        /*@ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
+        /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
-        //write_reg_value((uint32_t *)(0x40040000 + 0x1000*(ep+1)), tmp);
     }
     tmp = 0;
     switch (size & 3) {
@@ -387,9 +384,9 @@ err:
     @ requires \valid(ep);
     @ requires \separated(ep,&ep->fifo[ep->fifo_idx],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), *ep ;
-    @ ensures size > USBOTG_HS_TX_CORE_FIFO_SZ ==> \result == MBED_ERROR_INVPARAM ;
-    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck != \false) ==> \result == MBED_ERROR_INVSTATE ;
-    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck == \false) ==> \result == MBED_ERROR_NONE && ep->fifo_lck == \false && ep->fifo_idx == (\old(ep->fifo_idx + size));
+    @ ensures size > USBOTG_HS_TX_CORE_FIFO_SZ <==> \result == MBED_ERROR_INVPARAM ;
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck != \false) <==> \result == MBED_ERROR_INVSTATE ;
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck == \false) <==> \result == MBED_ERROR_NONE && ep->fifo_lck == \false && ep->fifo_idx == (\old(ep->fifo_idx + size));
 */
 
 mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
@@ -450,11 +447,11 @@ err:
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
 
     @   ensures \result == MBED_ERROR_INVPARAM
-    ==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
+    <==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
      || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
 
     @   ensures \result == MBED_ERROR_NONE
-    ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
+    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
 
 */
 
