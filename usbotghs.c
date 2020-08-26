@@ -62,29 +62,6 @@
 
 
 
-/******************************************************************
- * Utilities
- */
-/* wait while the iepint (or oepint in host mode) clear the DATA_OUT state */
-static void usbotghs_wait_for_xmit_complete(usbotghs_ep_t *ep)
-{
-#if CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
-    /* wait for iepint interrupt & DIEPINTx TXFE flag set, specifying that
-     * the TxFIFO is half empty
-     */
-    do {
-        ;
-    } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
-#else
-    /* wait for iepint interrupt & DIEPINTx TXFC flag set, specifying that
-     * the TxFIFO is half empty
-     */
-    do {
-        ;
-    } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
-#endif
-    return;
-}
 
 /******************************************************************
  * Defining functional API
@@ -721,7 +698,6 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
 
-        //usbotghs_wait_for_xmit_complete(ep);
         residual_size -= fifo_size;
         log_printf("[USBOTG][HS] EP: %d: residual: %d\n", ep_id, residual_size);
     }
@@ -758,10 +734,6 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         usbotghs_write_epx_fifo(residual_size, ep);
-        /* wait for XMIT data to be transfered (wait for iepint (or oepint in
-         * host mode) to set the EP in correct state */
-        //usbotghs_wait_for_xmit_complete(ep);
-
         residual_size = 0;
     }
 
