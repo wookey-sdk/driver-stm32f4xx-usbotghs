@@ -25,6 +25,7 @@
 #include "libc/regutils.h"
 #include "libc/types.h"
 #include "libc/stdio.h"
+#include "libc/sync.h"
 #include "libc/sanhandlers.h"
 
 #include "api/libusbotghs.h"
@@ -381,7 +382,7 @@ static mbed_error_t oepint_handler(void)
                 }
                 /* XXX: only if SNAK set */
                 /* now that data has been handled, consider FIFO as empty */
-                ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                set_u8_with_membarrier(&(ctx->out_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
             }
             ep_id++;
             daint >>= 1;
@@ -399,7 +400,7 @@ static mbed_error_t oepint_handler(void)
                 /* now that transmit is complete, set ep state as IDLE */
                 /* calling upper handler, transmitted size read from DOEPSTS */
                 errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
-                ctx->out_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                set_u32_with_membarrier(&(ctx->out_eps[ep_id].state), USBOTG_HS_EP_STATE_IDLE);
             }
             ep_id++;
             val = val << 1;
@@ -513,7 +514,7 @@ static mbed_error_t iepint_handler(void)
                             usbotghs_write_epx_fifo(ctx->in_eps[ep_id].mpsize, &(ctx->in_eps[ep_id]));
                         } else {
                             /* now EP is idle */
-                            ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                            set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
                             /* inform libctrl of transfert complete */
                             if (handler_sanity_check((physaddr_t)ctx->in_eps[ep_id].handler)) {
                                 goto err;
@@ -528,7 +529,7 @@ static mbed_error_t iepint_handler(void)
                         /* the EP is only set as IDLE to inform the send process
                          * that the FIFO content is effectively sent */
                         /* clear current FIFO, now that content is sent */
-                        ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                        set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
                     }
                 }
 #if 0
@@ -560,7 +561,7 @@ static mbed_error_t iepint_handler(void)
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
                 /* calling upper handler */
                 errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
-                ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE;
+                set_u32_with_membarrier(&(ctx->in_eps[ep_id].state), USBOTG_HS_EP_STATE_IDLE);
             }
             ep_id++;
             val = val << 1;
@@ -672,7 +673,7 @@ static mbed_error_t rxflvl_handler(void)
                         usbotghs_rxfifo_flush(epnum);
                         usbotghs_endpoint_stall(epnum, USBOTG_HS_EP_DIR_OUT);
                     }
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
+                    set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_DATA_OUT_WIP);
                     if (epnum == USBOTG_HS_EP0) {
                         if (ctx->out_eps[epnum].fifo_idx < ctx->out_eps[epnum].fifo_size) {
                             /* rise oepint to permit refragmentation at oepint layer */
@@ -693,7 +694,7 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_DATA_OUT;
+                    set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_DATA_OUT);
                     break;
                 }
             case PKT_STATUS_SETUP_TRANS_COMPLETE:
@@ -704,7 +705,7 @@ static mbed_error_t rxflvl_handler(void)
                         goto err;
                     }
                     /* setup transfer complete, no wait oepint to handle this */
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP;
+                    set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_SETUP);
                     break;
                 }
             case PKT_STATUS_SETUP_PKT_RECEIVED:
@@ -744,7 +745,7 @@ static mbed_error_t rxflvl_handler(void)
                     // TODO: read_fifo(setup_packet, bcnt, epnum);
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_SETUP_WIP;
+                    set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_SETUP_WIP);
                     break;
                 }
             default:

@@ -24,6 +24,7 @@
 
 #include "libc/regutils.h"
 #include "libc/types.h"
+#include "libc/sync.h"
 #include "libc/stdio.h"
 #include "api/libusbotghs.h"
 #include "usbotghs_regs.h"
@@ -314,11 +315,13 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
             ctx->fifo_idx += fifosize;
         }
     }
+
+    set_bool_with_membarrier(&(ep->fifo_lck), true);
     ep->fifo_idx = 0;
     ep->fifo = NULL;
-    ep->fifo_lck = false;
     ep->fifo_size = 0;
     ep->core_txfifo_empty = true;
+    set_bool_with_membarrier(&(ep->fifo_lck), false);
 err:
     return errcode;
 }
@@ -358,10 +361,10 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
-    ep->fifo_lck = true;
+    set_bool_with_membarrier(&(ep->fifo_lck), true);
     usbotghs_read_core_fifo(&(ep->fifo[ep->fifo_idx]), size, ep->id);
     ep->fifo_idx += size;
-    ep->fifo_lck = false;
+    set_bool_with_membarrier(&(ep->fifo_lck), false);
 err:
     return errcode;
 }
@@ -401,12 +404,12 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     /* Let's now do the read transaction itself... */
-    if (ep->fifo_lck != false) {
+    if (ep->fifo_lck == true) {
         log_printf("[USBOTG][HS] invalid state! fifo already locked\n");
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
-    ep->fifo_lck = true;
+    set_bool_with_membarrier(&(ep->fifo_lck), true);
     usbotghs_write_core_fifo(&(ep->fifo[ep->fifo_idx]), size, ep->id);
     /* int overflow check */
     if (ep->fifo_idx >= ((uint32_t)4*1024*1024*1000 - size)) {
@@ -417,8 +420,8 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     ep->fifo_idx += size;
-    ep->fifo_lck = false;
 err:
+    set_bool_with_membarrier(&(ep->fifo_lck), false);
     return errcode;
 }
 
@@ -488,11 +491,22 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
         goto err;
     }
 #endif
+    if (ep->fifo_lck == true) {
+        /* Recv FIFO is currently being proceeded ! */
+        errcode = MBED_ERROR_INVSTATE;
+        goto err;
+    }
     /* set RAM FIFO for current EP. */
 
+    /* Lock FIFO handling here */
+    set_bool_with_membarrier(&(ep->fifo_lck), true);
     ep->fifo = dst;
     ep->fifo_idx = 0;
     ep->fifo_size = size;
+    /* the following membarrier does push the previous fifo_* variables
+     * to the memory, even if they were not using memory barrier at each
+     * state. The lock being true, this section is concurrency safe  */
+    set_bool_with_membarrier(&(ep->fifo_lck), false);
 
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* configuring DMA for this FIFO */
@@ -570,17 +584,21 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
-    if (ep->fifo_lck) {
+    if (ep->fifo_lck == true) {
         /* a DMA transaction is currently being executed toward the recv FIFO.
          * Wait for it to finish before resetting it */
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
+
     log_printf("[USBOTG][HS] set ep %d TxFIFO to %p (size %d)\n", ep->id, src, size);
+
+    set_bool_with_membarrier(&(ep->fifo_lck), true);
     /* set RAM FIFO for current EP. */
     ep->fifo = src;
     ep->fifo_idx = 0;
     ep->fifo_size = size;
+    set_bool_with_membarrier(&(ep->fifo_lck), false);
 
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* 1. set DMA src address*/
@@ -637,8 +655,6 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
                 goto err;
             }
         }
-        //errcode = MBED_ERROR_BUSY;
-        //goto err;
     }
 
 err:

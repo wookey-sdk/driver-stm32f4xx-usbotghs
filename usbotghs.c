@@ -99,7 +99,10 @@ static const char *devname = "usb-otg-hs";
 #if defined(__FRAMAC__)
 usbotghs_context_t usbotghs_ctx = { 0 };
 #else
-static volatile usbotghs_context_t usbotghs_ctx = { 0 };
+/* the static keyword may be removed in replacement with MetACSL anotations specifying
+ * that the lonely function handling direct access to this variable is usbotghs_get_context
+ */
+static usbotghs_context_t usbotghs_ctx = { 0 };
 #endif/*!__FRAMAC__*/
 
 /*@
@@ -109,7 +112,7 @@ static volatile usbotghs_context_t usbotghs_ctx = { 0 };
 
 usbotghs_context_t *usbotghs_get_context(void)
 {
-    return (usbotghs_context_t *)&usbotghs_ctx;
+    return &usbotghs_ctx;
 }
 
 /*@
