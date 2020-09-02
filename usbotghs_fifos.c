@@ -142,7 +142,7 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
         tmp |= (uint32_t)(src[1] & 0xff) << 8;
         tmp |= (uint32_t)(src[2] & 0xff) << 16;
         tmp |= (uint32_t)(src[3] & 0xff) << 24;
-        /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
+        /*  assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
     }
     tmp = 0;
@@ -388,8 +388,9 @@ err:
     @ requires \separated(ep,&ep->fifo[ep->fifo_idx],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), *ep ;
     @ ensures size > USBOTG_HS_TX_CORE_FIFO_SZ <==> \result == MBED_ERROR_INVPARAM ;
-    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck != \false) <==> \result == MBED_ERROR_INVSTATE ;
-    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck == \false) <==> \result == MBED_ERROR_NONE && ep->fifo_lck == \false && ep->fifo_idx == (\old(ep->fifo_idx + size));
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \true) <==> \result == MBED_ERROR_INVSTATE ;
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \false && \old(ep->fifo_idx) >= ((uint32_t)4*1024*1024*1000 - size) ) <==> \result == MBED_ERROR_NOMEM ;
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \false && \old(ep->fifo_idx) < ((uint32_t)4*1024*1024*1000 - size) ) ==> (\result == MBED_ERROR_NONE && ep->fifo_lck == \false);
 */
 
 mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
@@ -422,6 +423,7 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
     ep->fifo_idx += size;
 err:
     set_bool_with_membarrier(&(ep->fifo_lck), false);
+    /*@ assert ep->fifo_lck == \false ; */
     return errcode;
 }
 
@@ -453,12 +455,19 @@ err:
     <==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
      || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
 
+    @   ensures \result == MBED_ERROR_INVSTATE
+    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
+        && usbotghs_ctx.out_eps[epid].fifo_lck == \true) ;
+
     @   ensures \result == MBED_ERROR_NONE
-    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
+    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
+    && usbotghs_ctx.out_eps[epid].fifo_lck != \true) ;
 
 */
 
 /* ep check is done by calling functions */
+
+/*  TODO : case CONFIG_USR_DEV_USBOTGHS_DMA == 1 && case CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 0 */
 
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {
@@ -535,7 +544,8 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     /* FIFO is now configured */
     /* CNAK is done by endpoint activation */
 err:
-    /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ; */
+    /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
+    && usbotghs_ctx.out_eps[epid].fifo_lck != \true ) ; */
 // Cyril : without this assert, global ensures about MBED_ERROR_NONE is not prooved
     return errcode;
 }
@@ -553,7 +563,6 @@ err:
     @   assumes (usbotghs_ctx.in_eps[epid].configured == \true) ;
     @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck != 0)  ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
-    @   ensures \old(usbotghs_ctx) == usbotghs_ctx;
 
     @ behavior fifo_null:
     @   assumes (usbotghs_ctx.in_eps[epid].configured == \true) ;

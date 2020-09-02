@@ -466,21 +466,11 @@ uint32_t usbotghs_get_ep_mpsize(void)
     @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \false) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0)); // Cyril : il faut tenir compte de la variable CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE...
     @   ensures \result == MBED_ERROR_INVSTATE ;
 
-    @ behavior set_fifo_error:
+    @ behavior configured:
     @   assumes &usbotghs_ctx != \null ;
     @   assumes !(ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW) ;
     @   assumes !((usbotghs_ctx.in_eps[ep_id].configured == \false) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
-    @   assumes (usbotghs_ctx.in_eps[ep_id].fifo_lck != 0)  ;
-    @   ensures \old(usbotghs_ctx) ≡ usbotghs_ctx;
-    @   ensures \result == MBED_ERROR_INVSTATE ;  // Cyril invparam atteint dans usbotghs_set_xmit_fifo si non configuré, cas traité avant
-
-    @ behavior fifo_no_error:
-    @   assumes &usbotghs_ctx != \null ;
-    @   assumes !(ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW) ;
-    @   assumes !((usbotghs_ctx.in_eps[ep_id].configured == \false) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
-    @   assumes (usbotghs_ctx.in_eps[ep_id].fifo_lck == 0)  ;
-    @   ensures \result == MBED_ERROR_BUSY || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE ;
-
+    @   ensures \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE ;
 
     @ complete behaviors ;
     @ disjoint behaviors ;
@@ -489,6 +479,7 @@ uint32_t usbotghs_get_ep_mpsize(void)
 
 /*
     TODO : add specification for !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+            be more precise with write_epx_fifo errors (pb with MBED_ERROR_INVPARAM error)
 */
 
 mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
@@ -529,8 +520,6 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVSTATE;
         goto err_init;
     }
-
-    /* @ assert ep == &usbotghs_ctx.in_eps[ep_id] ; */
 
      fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
 
@@ -1263,14 +1252,14 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
         goto err;
     }
 
-    /* @ assert (ep > 0) ==> USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x7ff << USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep)) ; */
-    /* @ assert (ep > 0) ==> USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x7ff << USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep)) ; */
-    /* @ assert (ep == 0) ==> USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x3 << USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep)) ; */
-    /* @ assert (ep == 0) ==> USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x3 << USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep)) ; */
-    /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_DIEPCTL(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
-    /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_DOEPCTL(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
-    /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_GINTMSK <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
-    /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_DAINTMSK <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
+    /*  assert (ep > 0) ==> USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x7ff << USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep)) ; */
+    /*  assert (ep > 0) ==> USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x7ff << USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep)) ; */
+    /*  assert (ep == 0) ==> USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x3 << USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep)) ; */
+    /*  assert (ep == 0) ==> USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep) == ((uint32_t)0x3 << USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep)) ; */
+    /*  assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_DIEPCTL(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
+    /*  assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_DOEPCTL(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
+    /*  assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_GINTMSK <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
+    /*  assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= r_CORTEX_M_USBOTG_HS_DAINTMSK <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
 
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
