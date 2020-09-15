@@ -1200,6 +1200,7 @@
      * configure a new endpoint with the given configuration (type, mode, data toggle,
      * FIFO informations)
      */
+    
     /*@
         @ requires \separated(&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
         @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)], usbotghs_ctx, usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)] ;
@@ -1218,9 +1219,14 @@
         @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
         @   ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_NOSTORAGE ;
 
+        @ behavior USBOTG_HS_EP_DIR_BOTH:
+        @   assumes &usbotghs_ctx != \null ;
+        @   assumes dir == USBOTG_HS_EP_DIR_BOTH ;
+        @   ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_NOSTORAGE ;        
+
         @ behavior default:
         @   assumes &usbotghs_ctx != \null ;
-        @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN  ;
+        @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN &&  dir != USBOTG_HS_EP_DIR_BOTH ;
         @   ensures \result == MBED_ERROR_NONE ;
 
         @ complete behaviors ;

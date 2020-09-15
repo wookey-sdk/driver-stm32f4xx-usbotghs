@@ -130,7 +130,6 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
     /*@
         @ loop invariant 0 <= i <= size_4bytes;
         @ loop invariant ep <= 3 ;
-        @ loop invariant \valid_read(src);
         @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
         @ loop invariant \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
         @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), tmp, src ;
