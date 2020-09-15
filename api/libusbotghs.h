@@ -130,6 +130,7 @@ typedef enum {
 typedef enum {
     USBOTG_HS_EP_DIR_IN,
     USBOTG_HS_EP_DIR_OUT,
+    USBOTG_HS_EP_DIR_BOTH,
 } usbotghs_ep_dir_t;
 
 
