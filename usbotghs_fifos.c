@@ -457,9 +457,7 @@ err:
     <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
 
 */
-
 /* ep check is done by calling functions */
-
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {
     usbotghs_context_t *ctx = usbotghs_get_context();

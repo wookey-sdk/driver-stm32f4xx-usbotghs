@@ -430,7 +430,7 @@ err:
   @ ensures \result == MAX_EPx_PKT_SIZE ;
   */
 
-uint32_t usbotghs_get_ep_mpsize(void)
+uint16_t usbotghs_get_ep_mpsize(void)
 {
     return MAX_EPx_PKT_SIZE;
 }
