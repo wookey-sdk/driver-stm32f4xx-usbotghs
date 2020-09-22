@@ -1831,8 +1831,8 @@ mbed_error_t usb_backend_drv_endpoint_disable(uint8_t ep_id, usb_backend_drv_ep_
 mbed_error_t usb_backend_drv_endpoint_enable(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
     __attribute__ ((alias("usbotghs_endpoint_enable")));
 
-    uint32_t usb_backend_get_ep_mpsize(void) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
-    usb_backend_drv_port_speed_t usb_backend_drv_get_speed(void) __attribute__ ((alias("usbotghs_get_speed")));
+uint16_t usb_backend_get_ep_mpsize(void) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
+usb_backend_drv_port_speed_t usb_backend_drv_get_speed(void) __attribute__ ((alias("usbotghs_get_speed")));
 
 
 #endif/*!__FRAMAC__*/
