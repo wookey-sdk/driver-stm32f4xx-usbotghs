@@ -241,7 +241,7 @@ err:
 
 /*
     TODO : be more precise for behavior epid_not_null : problem proving \result == MBED_ERROR_NOSTORAGE, problably
-            due to some assume about ep->mpsize
+            du to some assume about ep->mpsize
 */
 
 mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
@@ -420,7 +420,6 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
     ep->fifo_idx += size;
 err:
     set_bool_with_membarrier(&(ep->fifo_lck), false);
-    /*@ assert ep->fifo_lck == \false ; */
     return errcode;
 }
 
@@ -452,19 +451,11 @@ err:
     <==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
      || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
 
-    @   ensures \result == MBED_ERROR_INVSTATE
-    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
-        && usbotghs_ctx.out_eps[epid].fifo_lck == \true) ;
-
     @   ensures \result == MBED_ERROR_NONE
-    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
-    && usbotghs_ctx.out_eps[epid].fifo_lck != \true) ;
+    ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
 
 */
-
-/* ep check is done by calling functions
-    TODO : add case CONFIG_USR_DEV_USBOTGHS_DMA == 1 && case CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 0 */
-
+/* ep check is done by calling functions */
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {
     usbotghs_context_t *ctx = usbotghs_get_context();
@@ -478,7 +469,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
         /* reception is done IN out_eps in device mode */
         ep = &(ctx->in_eps[epid]);
 #endif
-    if (!ep->configured || !ep->mpsize ) {
+    if (!ep->configured || !ep->mpsize ) {  // ep->mpsize check to avoid RTE later
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
@@ -540,39 +531,40 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     /* FIFO is now configured */
     /* CNAK is done by endpoint activation */
 err:
-    /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
-    && usbotghs_ctx.out_eps[epid].fifo_lck != \true ) ; */
-
-/* without this assert, global ensures about MBED_ERROR_NONE is not prooved  */
-
+    /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ; */
+// without this assert, global ensures about MBED_ERROR_NONE is not prooved
     return errcode;
 }
 
 /*@
     @ requires \valid_read(src);
     @ requires \separated(src,&usbotghs_ctx);
-    @ assigns usbotghs_ctx ;
+     @   assigns usbotghs_ctx ;
 
     @ behavior not_configured:
     @   assumes (usbotghs_ctx.in_eps[epid].configured == \false) ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
 
     @ behavior fifo_not_null:
-    @   assumes (usbotghs_ctx.in_eps[epid].configured == \true) ;
-    @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck != 0)  ;
+    @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
+    @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
 
     @ behavior fifo_null:
-    @   assumes (usbotghs_ctx.in_eps[epid].configured == \true) ;
-    @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == 0)  ;
+    @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
+    @   assumes !(usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_NONE ;
+
 
     @ complete behaviors;
     @ disjoint behaviors ;
 
 */
 
-/* epid check done by calling function, usbotghs_send_data */
+/* epid check done by calling function, usbotghs_send_data
+    TODO : add !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE behavior and CONFIG_USR_DEV_USBOTGHS_DMA behavior
+    FIXME : assigns \nothing for behavior fifo_not_null : not validated by WP
+*/
 
 mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 {
@@ -583,6 +575,7 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* transmition is done using in_eps in device mode */
         ep = &(ctx->in_eps[epid]);
+        /*@ assert ep == &usbotghs_ctx.in_eps[epid] ; */
 #else
         /* transmition is done using out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
@@ -594,6 +587,7 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
     if (ep->fifo_lck == true) {
         /* a DMA transaction is currently being executed toward the recv FIFO.
          * Wait for it to finish before resetting it */
+        /*@ assert usbotghs_ctx.in_eps[epid].fifo_lck == \true ; */
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }

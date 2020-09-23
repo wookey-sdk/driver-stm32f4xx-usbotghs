@@ -324,7 +324,7 @@ void usbotghs_unbind(void);
 
 usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir);
 
-uint32_t usbotghs_get_ep_mpsize(void);
+uint16_t usbotghs_get_ep_mpsize(void);
 
 usbotghs_port_speed_t usbotghs_get_speed(void);
 
