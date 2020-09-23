@@ -130,7 +130,6 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
     /*@
         @ loop invariant 0 <= i <= size_4bytes;
         @ loop invariant ep <= 3 ;
-        @ loop invariant \valid_read(src);
         @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
         @ loop invariant \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
         @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), tmp, src ;
@@ -142,7 +141,6 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
         tmp |= (uint32_t)(src[1] & 0xff) << 8;
         tmp |= (uint32_t)(src[2] & 0xff) << 16;
         tmp |= (uint32_t)(src[3] & 0xff) << 24;
-        /* @ assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
     }
     tmp = 0;
@@ -242,7 +240,6 @@ err:
 */
 
 /*
-    RTE patched for ctx->fifo_idx += fifosize;
     TODO : be more precise for behavior epid_not_null : problem proving \result == MBED_ERROR_NOSTORAGE, problably
             du to some assume about ep->mpsize
 */
@@ -388,8 +385,9 @@ err:
     @ requires \separated(ep,&ep->fifo[ep->fifo_idx],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), *ep ;
     @ ensures size > USBOTG_HS_TX_CORE_FIFO_SZ <==> \result == MBED_ERROR_INVPARAM ;
-    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck != \false) <==> \result == MBED_ERROR_INVSTATE ;
-    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && ep->fifo_lck == \false) <==> \result == MBED_ERROR_NONE && ep->fifo_lck == \false && ep->fifo_idx == (\old(ep->fifo_idx + size));
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \true) <==> \result == MBED_ERROR_INVSTATE ;
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \false && \old(ep->fifo_idx) >= ((uint32_t)4*1024*1024*1000 - size) ) <==> \result == MBED_ERROR_NOMEM ;
+    @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \false && \old(ep->fifo_idx) < ((uint32_t)4*1024*1024*1000 - size) ) ==> (\result == MBED_ERROR_NONE && ep->fifo_lck == \false);
 */
 
 mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
@@ -445,6 +443,8 @@ err:
  */
 
 /*@
+    @ requires \valid(dst);
+    @ requires epid < USBOTGHS_MAX_OUT_EP ;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
 
     @   ensures \result == MBED_ERROR_INVPARAM
@@ -452,7 +452,7 @@ err:
      || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
 
     @   ensures \result == MBED_ERROR_NONE
-    <==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
+    ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
 
 */
 /* ep check is done by calling functions */
@@ -540,36 +540,39 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     /* CNAK is done by endpoint activation */
 err:
     /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ; */
-// Cyril : without this assert, global ensures about MBED_ERROR_NONE is not prooved
+// without this assert, global ensures about MBED_ERROR_NONE is not prooved
     return errcode;
 }
 
 /*@
     @ requires \valid_read(src);
     @ requires \separated(src,&usbotghs_ctx);
-    @ assigns usbotghs_ctx ;
+     @   assigns usbotghs_ctx ;
 
     @ behavior not_configured:
     @   assumes (usbotghs_ctx.in_eps[epid].configured == \false) ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
 
     @ behavior fifo_not_null:
-    @   assumes (usbotghs_ctx.in_eps[epid].configured == \true) ;
-    @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck != 0)  ;
+    @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
+    @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
-    @   ensures \old(usbotghs_ctx) == usbotghs_ctx;
 
     @ behavior fifo_null:
-    @   assumes (usbotghs_ctx.in_eps[epid].configured == \true) ;
-    @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == 0)  ;
+    @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
+    @   assumes !(usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_NONE ;
+
 
     @ complete behaviors;
     @ disjoint behaviors ;
 
 */
 
-/* epid check done by calling function, usbotghs_send_data */
+/* epid check done by calling function, usbotghs_send_data
+    TODO : add !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE behavior and CONFIG_USR_DEV_USBOTGHS_DMA behavior
+    FIXME : assigns \nothing for behavior fifo_not_null : not validated by WP
+*/
 
 mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 {
@@ -580,6 +583,7 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* transmition is done using in_eps in device mode */
         ep = &(ctx->in_eps[epid]);
+        /*@ assert ep == &usbotghs_ctx.in_eps[epid] ; */
 #else
         /* transmition is done using out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
@@ -591,6 +595,7 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
     if (ep->fifo_lck == true) {
         /* a DMA transaction is currently being executed toward the recv FIFO.
          * Wait for it to finish before resetting it */
+        /*@ assert usbotghs_ctx.in_eps[epid].fifo_lck == \true ; */
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
@@ -631,7 +636,7 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
      */
 
     if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
-        errcode = MBED_ERROR_BUSY;  // cyril : move errcode and goto into if statement
+        errcode = MBED_ERROR_BUSY;
         goto err;
     }
     /*
