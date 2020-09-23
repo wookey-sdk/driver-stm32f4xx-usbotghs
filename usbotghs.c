@@ -214,7 +214,7 @@ mbed_error_t usbotghs_declare(void)
     /*@
       @ loop invariant 0 <= i <= (USB_HS_ULPI_D7+1) ;
       @ loop invariant \valid(usbotghs_ctx.dev.gpios + (0..(USB_HS_ULPI_D7))) ;
-      @ loop assigns usbotghs_ctx, i ;
+      @ loop assigns usbotghs_ctx ;
       @ loop variant ((USB_HS_ULPI_D7+1) - i) ;
       */
 
@@ -606,7 +606,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
           @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DSTS);
           @ loop invariant ep->state == USBOTG_HS_EP_STATE_DATA_IN_WIP;
           @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns cpt ;
+          @ loop assigns \nothing ;
           @ loop variant CPT_HARD - cpt ;
           */
 
@@ -672,7 +672,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         /*@
           @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
           @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns cpt ;
+          @ loop assigns \nothing ;
           @ loop variant CPT_HARD - cpt ;
           */
 
@@ -819,7 +819,7 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
     /*@
       @ loop invariant \valid(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
       @ loop invariant 0<=cpt<= CPT_HARD ;
-      @ loop assigns cpt ;
+      @ loop assigns \nothing ;
       @ loop variant CPT_HARD - cpt ;
       */
 
@@ -901,7 +901,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
             /* wait for end of current transmission */
             /*@
               @ loop invariant 0<=cpt<= CPT_HARD ;
-              @ loop assigns cpt, count ;
+              @ loop assigns  count ;
               @ loop variant CPT_HARD - cpt ;
               */
 
@@ -932,7 +932,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 /* wait for end of current transmission */
                 /*@
                   @ loop invariant 0<=cpt<= CPT_HARD ;
-                  @ loop assigns cpt ;
+                  @ loop assigns \nothing ;
                   @ loop variant CPT_HARD - cpt ;
                   */
 
@@ -1126,7 +1126,7 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
 
             /*@
               @ loop invariant 0<=cpt<= CPT_HARD ;
-              @ loop assigns count, cpt ;
+              @ loop assigns count ;
               @ loop variant CPT_HARD - cpt;
               */
 
@@ -1157,7 +1157,7 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
             /* wait for end of current transmission */
             /*@
               @ loop invariant 0<=cpt<= CPT_HARD ;
-              @ loop assigns count, cpt ;
+              @ loop assigns count ;
               @ loop variant CPT_HARD - cpt;
               */
 
