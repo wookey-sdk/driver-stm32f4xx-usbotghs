@@ -141,7 +141,6 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
         tmp |= (uint32_t)(src[1] & 0xff) << 8;
         tmp |= (uint32_t)(src[2] & 0xff) << 16;
         tmp |= (uint32_t)(src[3] & 0xff) << 24;
-        /*  assert (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ; */
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
     }
     tmp = 0;
@@ -241,9 +240,8 @@ err:
 */
 
 /*
-    RTE patched for ctx->fifo_idx += fifosize;
     TODO : be more precise for behavior epid_not_null : problem proving \result == MBED_ERROR_NOSTORAGE, problably
-            du to some assume about ep->mpsize
+            due to some assume about ep->mpsize
 */
 
 mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
@@ -447,7 +445,7 @@ err:
 
 /*@
     @ requires \valid(dst);
-    @ requires epid < USBOTGHS_MAX_OUT_EP ; // Cyril : respect du contexte appelant garantit cette propriété
+    @ requires epid < USBOTGHS_MAX_OUT_EP ;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
 
     @   ensures \result == MBED_ERROR_INVPARAM
@@ -464,9 +462,8 @@ err:
 
 */
 
-/* ep check is done by calling functions */
-
-/*  TODO : case CONFIG_USR_DEV_USBOTGHS_DMA == 1 && case CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 0 */
+/* ep check is done by calling functions
+    TODO : add case CONFIG_USR_DEV_USBOTGHS_DMA == 1 && case CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 0 */
 
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {
@@ -481,7 +478,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
         /* reception is done IN out_eps in device mode */
         ep = &(ctx->in_eps[epid]);
 #endif
-    if (!ep->configured || !ep->mpsize ) {  // ep->mpsize check to avoid RTE later
+    if (!ep->configured || !ep->mpsize ) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
@@ -545,7 +542,9 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 err:
     /*@ assert errcode == MBED_ERROR_NONE ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0
     && usbotghs_ctx.out_eps[epid].fifo_lck != \true ) ; */
-// Cyril : without this assert, global ensures about MBED_ERROR_NONE is not prooved
+
+/* without this assert, global ensures about MBED_ERROR_NONE is not prooved  */
+
     return errcode;
 }
 
@@ -635,7 +634,7 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id)
      */
 
     if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_TXFFLSH)){
-        errcode = MBED_ERROR_BUSY;  // cyril : move errcode and goto into if statement
+        errcode = MBED_ERROR_BUSY;
         goto err;
     }
     /*
