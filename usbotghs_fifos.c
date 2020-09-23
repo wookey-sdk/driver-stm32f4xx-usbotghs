@@ -445,8 +445,6 @@ err:
  */
 
 /*@
-    @ requires \valid(dst);
-    @ requires epid < USBOTGHS_MAX_OUT_EP ; // Cyril : respect du contexte appelant garantit cette propriété
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
 
     @   ensures \result == MBED_ERROR_INVPARAM
@@ -464,6 +462,14 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     usbotghs_ep_t*      ep;
     mbed_error_t        errcode = MBED_ERROR_NONE;
 
+    if (dst == NULL) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (epid >= USBOTGHS_MAX_OUT_EP) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* reception is done ON out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
