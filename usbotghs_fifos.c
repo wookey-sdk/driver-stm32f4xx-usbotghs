@@ -443,8 +443,6 @@ err:
  */
 
 /*@
-    @ requires \valid(dst);
-    @ requires epid < USBOTGHS_MAX_OUT_EP ;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
 
     @   ensures \result == MBED_ERROR_INVPARAM
