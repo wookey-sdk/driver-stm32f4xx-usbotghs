@@ -1786,6 +1786,9 @@ mbed_error_t usb_backend_drv_configure_endpoint(uint8_t               ep,
         usb_backend_drv_ioep_handler_t handler)
     __attribute__ ((alias("usbotghs_configure_endpoint")));
 
+mbed_error_t usb_backend_drv_deconfigure_endpoint(uint8_t ep)
+    __attribute__ ((alias("usbotghs_deconfigure_endpoint")));
+
 usb_backend_drv_ep_state_t  usb_backend_drv_get_ep_state(uint8_t epnum, usb_backend_drv_ep_dir_t dir)
     __attribute__ ((alias("usbotghs_get_ep_state")));
 mbed_error_t usb_backend_drv_send_data(uint8_t *src, uint32_t size, uint8_t ep)
