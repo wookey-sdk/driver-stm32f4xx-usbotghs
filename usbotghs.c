@@ -62,29 +62,7 @@
 
 
 
-/******************************************************************
- * Utilities
- */
-/* wait while the iepint (or oepint in host mode) clear the DATA_OUT state */
-static void usbotghs_wait_for_xmit_complete(usbotghs_ep_t *ep)
-{
-#if CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
-    /* wait for iepint interrupt & DIEPINTx TXFE flag set, specifying that
-     * the TxFIFO is half empty
-     */
-    do {
-        ;
-    } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
-#else
-    /* wait for iepint interrupt & DIEPINTx TXFC flag set, specifying that
-     * the TxFIFO is half empty
-     */
-    do {
-        ;
-    } while (ep->state != USBOTG_HS_EP_STATE_IDLE);
-#endif
-    return;
-}
+
 
 /******************************************************************
  * Defining functional API
@@ -1439,13 +1417,19 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
-
     clear_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
+
     if (ctx->in_eps[ep].configured == true) {
+        /* FIX: flushing fifo for each EP */
+        usbotghs_txfifo_flush(ep);
+
         clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
                 USBOTG_HS_DIEPCTL_EPENA_Msk);
     }
     if (ctx->out_eps[ep].configured == true) {
+        /* FIX: flushing fifo for each EP */
+        usbotghs_rxfifo_flush(ep);
+
         clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
                 USBOTG_HS_DOEPCTL_EPENA_Msk);
     }
