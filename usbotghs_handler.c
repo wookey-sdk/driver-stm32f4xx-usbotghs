@@ -353,6 +353,10 @@ static mbed_error_t oepint_handler(void)
         uint8_t ep_id = 0;
         log_printf("[USBOTG][HS] handling received data\n");
         for (int i = 0; daint; i++) {
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
+                /* no more HW endpoint to check in this core implementation, leaving */
+                break;
+            }
             if (daint & val) {
                 log_printf("[USBOTG][HS] received data on ep %d\n", ep_id);
                 /* calling upper handler */
@@ -465,6 +469,10 @@ static mbed_error_t iepint_handler(void)
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
         for (int i = 0; daint; i++) {
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
+                /* no more HW endpoint to check in this core implementation, leaving */
+                break;
+            }
             if (daint & val) {
                 /* an iepint for this EP is active */
                 log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
@@ -652,6 +660,11 @@ static mbed_error_t rxflvl_handler(void)
 	dpid = USBOTG_HS_GRXSTSP_GET_DPID(grxstsp);
 	bcnt =  USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp);
 	size = 0;
+    if (epnum >= USBOTGHS_MAX_OUT_EP) {
+        log_printf("[USBOTG][HS] invalid register value for epnum ! (fault injection ?)\n");
+        errcode = MBED_ERROR_UNKNOWN;
+        goto err;
+    }
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
 # if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE

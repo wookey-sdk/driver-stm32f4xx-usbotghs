@@ -44,11 +44,10 @@
 #define CORE_FIFO_LENGTH 4096
 
 /*@
-  @ requires \valid_read((uint8_t*)dest + (0 .. size-1));
-  @ requires size > 0;
-  @ requires 0 <= ep < USBOTGHS_MAX_OUT_EP;
+  @ requires \valid((uint8_t*)dest + (0 .. size-1));
   @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
-  @ assigns dest[0 .. size-1];
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx, dest);
+  @ assigns dest[0 .. size-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   @
   */
 void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
@@ -59,6 +58,13 @@ void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
      */
 
 #else
+    /* sanitize, as read_core_fifo can be called from handler, with forged content */
+    if (size == 0) {
+        return;
+    }
+    if (ep > USBOTGHS_MAX_OUT_EP) {
+        return;
+    }
     /*
      * With DMA mode deactivated, the copy is done manually
      */
@@ -385,8 +391,8 @@ err:
 
 /*@
     @ requires \valid(ep);
-    @ requires \separated(ep,&ep->fifo[ep->fifo_idx],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), *ep ;
+    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
     @ ensures size > USBOTG_HS_TX_CORE_FIFO_SZ <==> \result == MBED_ERROR_INVPARAM ;
     @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \true) <==> \result == MBED_ERROR_INVSTATE ;
     @ ensures (size <= USBOTG_HS_TX_CORE_FIFO_SZ && \old(ep->fifo_lck) == \false && \old(ep->fifo_idx) >= ((uint32_t)4*1024*1024*1000 - size) ) <==> \result == MBED_ERROR_NOMEM ;

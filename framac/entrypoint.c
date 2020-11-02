@@ -201,6 +201,14 @@ void test_fcn_driver_eva(void)
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 0);
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 1);
 
+    usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    usbotghs_set_recv_fifo((uint8_t *)&resp, 128, 0);
+
+    usb_backend_drv_configure_endpoint(1,type,USB_BACKEND_DRV_EP_DIR_OUT, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    usbotghs_set_recv_fifo((uint8_t *)&resp, 512, 1);
+    usbotghs_activate_endpoint(1, USB_BACKEND_DRV_EP_DIR_OUT);
+
+
     /*
         TODO : send_data analyse is not enough generalised
     */
