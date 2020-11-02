@@ -9,6 +9,7 @@
 #include "api/libusbotghs.h"
 #include "usbotghs.h"
 #include "usbotghs_fifos.h"
+#include "usbotghs_handler.h"
 
 
 /*
@@ -172,7 +173,31 @@ void test_fcn_driver_eva(void)
 
 }
 
+void test_fcn_isr_events(void)
+{
+    uint32_t intsts = 0;
+    uint32_t intmsk = 0;
+
+    /* TODO: set core register to valid content (or controlled interval) to
+     * check all switch/if control cases of handlers */
+    /* first reset */
+    intsts = (1 << 12);
+    intmsk = (1 << 12);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+    /* enumdone */
+    intsts = (1 << 13);
+    intmsk = (1 << 13);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+    /* looping on any */
+    for (uint8_t i = 0; i < 32; ++i) {
+        intsts = (1 << i);
+        intmsk = (1 << i);
+        USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+    }
+}
+
 void main(void)
 {
     test_fcn_driver_eva() ;
+    test_fcn_isr_events() ;
 }
