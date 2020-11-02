@@ -43,11 +43,7 @@
 /* Hardware IP FIFO size */
 #define CORE_FIFO_LENGTH 4096
 
-#if defined(__FRAMAC__)
 void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
-#else
-void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile const uint32_t size, uint8_t ep)
-#endif/*__FRAMAC__*/
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /*
@@ -98,11 +94,7 @@ void usbotghs_read_core_fifo(volatile uint8_t *dest, volatile const uint32_t siz
         this limit is hardware dependant (even if USBOTGHS_MAX_IN_EP > USBOTGHS_MAX_OUT_EP, it is not possible
         to handle more than USBOTGHS_MAX_OUT_EP (+ EP0))
  */
-#if defined(__FRAMAC__)
 static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, uint8_t ep)
-#else
-static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile const uint32_t size, uint8_t ep)
-#endif/*__FRAMAC__*/
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* configuring DMA for this FIFO */
@@ -211,7 +203,7 @@ mbed_error_t usbotghs_init_global_fifo(void)
 /*@
     @ requires \valid(ep);
     @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx) ;
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx, *ep ;
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.fifo_idx, *ep , usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
 
     @ behavior epid_null_NOSTORAGE:
     @   assumes &usbotghs_ctx != \null;
@@ -354,6 +346,7 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
     set_bool_with_membarrier(&(ep->fifo_lck), true);
     usbotghs_read_core_fifo(&(ep->fifo[ep->fifo_idx]), size, ep->id);
     ep->fifo_idx += size;
+    request_data_membarrier();
     set_bool_with_membarrier(&(ep->fifo_lck), false);
 err:
     return errcode;
@@ -411,6 +404,7 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
         goto err;
     }
     ep->fifo_idx += size;
+    request_data_membarrier();
 err:
     set_bool_with_membarrier(&(ep->fifo_lck), false);
     return errcode;
@@ -656,35 +650,39 @@ mbed_error_t usbotghs_txfifo_flush_all(void)
     mbed_error_t errcode = MBED_ERROR_NONE;
 
     usbotghs_context_t *ctx = usbotghs_get_context();
-    if (!ctx) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
     /* Device mode, TxFIFO set in IN EPs */
     for (uint8_t i = 0; i < USBOTGHS_MAX_IN_EP; ++i) {
         if (ctx->in_eps[i].configured) {
             usbotghs_txfifo_flush(i);
         }
     }
-err:
     return errcode;
-
 }
 
+/*@
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_BUSY ;
+*/
 mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-	uint32_t count = 0;
     ep_id = ep_id;
 	/* Select which ep to flush and do it
  	 * This is the FIFO number that must be flushed using the RxFIFO Flush bit.
  	 * This field must not be changed until the core clears the RxFIFO Flush bit.
  	 */
-    while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_RXFFLSH)) {
-        if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
-            log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the RxFIFO Flush bit GRSTCTL:RXFFLSH\n");
-            errcode = MBED_ERROR_BUSY;
-            goto err;
+    /*@
+        @ loop invariant 0 <= cpt <= CPT_HARD;
+        @ loop assigns cpt;
+        @ loop variant (CPT_HARD - cpt);
+    */
+    for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
+        if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_RXFFLSH)) {
+            if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
+                log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the RxFIFO Flush bit GRSTCTL:RXFFLSH\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
         }
     }
 	/*
@@ -696,12 +694,18 @@ mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id)
 
 	/* Write: the AHBIDL bit in OTG_HS_GRSTCTL ensures that the core is not writing anything to the FIFO */
 	set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, 1, USBOTG_HS_GRSTCTL_RXFFLSH);
-	count = 0;
-    while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_RXFFLSH)) {
-        if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
-            log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the RxFIFO Flush bit GRSTCTL:RXFFLSH\n");
-            errcode = MBED_ERROR_BUSY;
-            goto err;
+    /*@
+        @ loop invariant 0 <= cpt <= CPT_HARD;
+        @ loop assigns cpt;
+        @ loop variant (CPT_HARD - cpt);
+    */
+    for(uint8_t cpt=0; cpt<CPT_HARD; cpt++) {
+        if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_RXFFLSH)) {
+            if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
+                log_printf("[USBOTG][HS] HANG! Waiting for the core to clear the RxFIFO Flush bit GRSTCTL:RXFFLSH\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
         }
     }
 err:

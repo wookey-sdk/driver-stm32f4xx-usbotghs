@@ -54,6 +54,39 @@ mbed_error_t my_handle_outepevent(uint32_t dev_id,
                                   uint32_t size,
                                   uint8_t ep);
 
+/* local definition of control plane reset handling (not a part of this proof, see
+ * usbtcrl proof for the effective control plane reset function
+ */
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t usbctrl_handle_reset(uint32_t dev_id);
+
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t usbctrl_handle_earlysuspend(uint32_t dev_id);
+
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t usbctrl_handle_usbsuspend(uint32_t dev_id);
+
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t usbctrl_handle_inepevent(uint32_t dev_id, uint32_t size, uint8_t ep);
+
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t usbctrl_handle_outepevent(uint32_t dev_id, uint32_t size, uint8_t ep);
+
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id);
+
 void test_fcn_driver_eva(void) ;
 
 #endif/*!ENTRY_H_*/

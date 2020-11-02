@@ -100,6 +100,40 @@ mbed_error_t my_handle_outepevent(uint32_t dev_id __attribute__((unused)),
     return MBED_ERROR_NONE;
 }
 
+/***************************************************************************
+ * requested prototypes and callbacks implementations
+ */
+
+mbed_error_t usbctrl_handle_earlysuspend(uint32_t dev_id __attribute__((unused))) {
+}
+
+mbed_error_t usbctrl_handle_reset(uint32_t dev_id __attribute__((unused))) {
+    return MBED_ERROR_NONE;
+}
+
+mbed_error_t usbctrl_handle_usbsuspend(uint32_t dev_id __attribute__((unused))) {
+
+    return MBED_ERROR_NONE;
+}
+
+mbed_error_t usbctrl_handle_inepevent(uint32_t dev_id __attribute__((unused)),
+                                      uint32_t size __attribute__((unused)),
+                                      uint8_t ep __attribute__((unused))) {
+    return MBED_ERROR_NONE;
+}
+
+mbed_error_t usbctrl_handle_outepevent(uint32_t dev_id __attribute__((unused)),
+                                       uint32_t size __attribute__((unused)),
+                                       uint8_t ep __attribute__((unused))) {
+    return MBED_ERROR_NONE;
+}
+
+mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id __attribute__((unused))) {
+    return MBED_ERROR_NONE;
+}
+
+
+
 /*
     test for functions defined in driver USB (not all function analysed, only the functions needed for libxDCI)
     nominal and bad parameters

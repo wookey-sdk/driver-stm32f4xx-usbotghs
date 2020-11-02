@@ -180,6 +180,9 @@ static mbed_error_t reserved_handler(void)
  *    At this point, all initialization required to receive SETUP packets is done,
  *    except for enabling control OUT endpoint 0 in DMA mode.
  */
+/*@
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.fifo_idx, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+  */
 static mbed_error_t reset_handler(void)
 {
     log_printf("[USB HS][RESET] received USB Reset\n");
