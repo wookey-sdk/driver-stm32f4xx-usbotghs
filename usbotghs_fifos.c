@@ -442,17 +442,6 @@ err:
  * for invalid enpoint type, INVPARAM if dst is NULL or size invalid)
  */
 
-/*@
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
-
-    @   ensures \result == MBED_ERROR_INVPARAM
-    <==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
-     || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
-
-    @   ensures \result == MBED_ERROR_NONE
-    ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
-
-*/
 /* ep check is done by calling functions */
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {

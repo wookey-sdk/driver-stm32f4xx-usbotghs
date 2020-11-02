@@ -53,6 +53,7 @@ mbed_error_t usbotghs_write_epx_fifo(uint32_t size, usbotghs_ep_t *ep);
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
 
 mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid);
+
 #if defined(__FRAMAC__)
 void usbotghs_read_core_fifo(uint8_t *dest, uint32_t size, uint8_t ep);
 #else

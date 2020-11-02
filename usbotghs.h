@@ -44,11 +44,16 @@
 #define USB_SETUP_TRANS_COMPLETED 0b0100 /* SETUP transaction completed (triggers an interrupt) */
 #define USB_SETUP_PACKET_RECEIVED 0b0110 /* SETUP data packet received */
 
+#ifndef __FRAMAC__
+
 #define USBOTGHS_MAX_IN_EP   8
 #define USBOTGHS_MAX_OUT_EP  3
 
-#define CPT_HARD 100
 #define MAX_EP_HW 4
+
+#endif
+
+#define CPT_HARD 100
 
 /*********************************************************
  * General tooling
@@ -64,6 +69,7 @@
  * Driver private structures and types
  */
 
+#ifndef __FRAMAC__
 typedef enum {
     USBOTG_HS_SPEED_LS = 0, /* aka Low speed (USB 1.0) */
     USBOTG_HS_SPEED_FS = 1, /* aka Full Speed (USB 1.1) */
@@ -77,8 +83,8 @@ typedef struct {
     uint8_t                      id;           /* EP id (libusbctrl view) */
     bool                         configured;   /* is EP configured in current configuration ? */
     uint16_t                     mpsize;       /* max packet size (bitfield, 11 bits, in bytes) */
-    usbotghs_ep_type_t           type;         /* EP type */
-    usbotghs_ep_state_t state;        /* EP current state */
+    uint8_t                      type;         /* EP type */
+    uint8_t             state;        /* EP current state */
     usbotghs_ep_dir_t   dir;
     usbotghs_ioep_handler_t      handler;      /* EP Handler for (I|O)EPEVENT */
 
@@ -98,15 +104,12 @@ typedef struct {
     uint16_t            fifo_idx;        /* consumed Core FIFO */
     usbotghs_ep_t       in_eps[USBOTGHS_MAX_IN_EP];       /* list of HW supported IN EPs */
     usbotghs_ep_t       out_eps[USBOTGHS_MAX_OUT_EP];      /* list of HW supported OUT EPs */
-    usbotghs_speed_t    speed;        /* device enumerated speed, default HS */
+    uint8_t             speed;        /* device enumerated speed, default HS */
 } usbotghs_context_t;
-
-#if defined(__FRAMAC__)
-/* TODO: maybe using GHOST variable instead ? */
-usbotghs_context_t usbotghs_ctx;  // global variable to be used in lib USBctrl specifications
-#endif
 
 
 usbotghs_context_t *usbotghs_get_context(void);
+
+#endif
 
 #endif /*!USBOTGHS_H_ */

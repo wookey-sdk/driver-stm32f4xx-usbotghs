@@ -1,0 +1,25 @@
+1) rappatriment de la libc de wookey dans le repertoire usbctrl, avec le fichier autoconf.h également
+
+2) modification du makefile pour lancer frama-c: -c11 dans les options de frama
+
+3)	usbctrl_handlers.c : dans frama-c, ctx doit etre volatile (fonction usbctrl_set_state prend en argument une struct context volatile)
+	donc soit cast ctx dans usbctrl_set_state, soit déclarer volatile usbctrl_context_t * dans la fonction
+	meme chose dans usbctrl_requests.c
+
+
+	usbctrl.c :
+		- variable num_ctx déclarée comme volatile : probleme, pour frama-c, volatile veut dire "peut prendre n'importe quelle valeur à n'importe quel endroit du code "
+				or num_ctx représente l'index du tableau des struct ctx, avec MAX = 2 contextes...donc num_ctx ne doit pas dépasser 1 dans le tableau
+		- ctx_list[MAX_USB_CTRL_CTX] : struct volatile aussi, en global : donc tout peut bouger pour frama dedans...
+		- ligne 56 : if (num_ctx >= MAX_USB_CTRL_CTX) et non pas if (num_ctx == MAX_USB_CTRL_CTX) : si num_ctx > MAX, ça plante aussi...
+		- ligne 70 : break jamais atteint à cause du goto avant
+		- usbctrl_get_handler, ligne 131, à cause du goto, on ne parcourt pas la boucle (mais je pense que c'est normal, c'est juste que frama n'arrive pas à acceder à ce bout de code (pas de i++ si ca marche))
+		- usbctrl_declare_interface, ligne 218 : ajout d'un goto err si on rentre dans la boucle conditionnelle
+									ligne 222 : ctx->cfg[ctx->curr_cfg].interface_num == MAX_INTERFACES_PER_DEVICE : >= et ajout d'un goto err également
+									ligne 228 : ctx->cfg[iface_config].first_free_epid = 1, pb avec iface_config, car ctx->num_cfg++ suivi de  iface_config = ctx->num_cfg;
+												donc iface_config peut dépasser 1, et donc debordement de tableau (juste avec deux interfaces et true, ça plante)
+									ligne 249 :  volatile usb_ep_infos_t *ep : bcp de warning si je n'enlève pas le volatile (3ème endroit où je dois le faire)
+									ligne 260 : ctx->cfg[iface_config].first_free_epid++;   pb pour frama, je peux déborder de u8int
+
+
+									instantiate pour memset, memcpy...

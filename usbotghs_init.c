@@ -112,7 +112,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     log_printf("[USB HS] initializing the core\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
     int count = 0;
-    uint32_t reg_value;
+    volatile uint32_t reg_value;
 
     /* 1. Read the User Hardware Configuration registers
      *
