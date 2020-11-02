@@ -169,15 +169,14 @@ static inline void usbotghs_write_core_fifo(volatile uint8_t *src, volatile cons
 #endif
 }
 
+/*@
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.fifo_idx;
+  @ ensures \result == MBED_ERROR_NONE;
+  */
 mbed_error_t usbotghs_init_global_fifo(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
-    if (ctx == NULL) {
-        log_printf("[USBOTG] ctx null\n");
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
     /*
      * 	  Set up the Data FIFO RAM for each of the FIFOs
 	 *      – Program the OTG_HS_GRXFSIZ register, to be able to receive control OUT data
@@ -200,10 +199,12 @@ mbed_error_t usbotghs_init_global_fifo(void)
      * RXFD (RxFIFO depth, in 32bits DWORD)
      */
 	set_reg(r_CORTEX_M_USBOTG_HS_GRXFSIZ, USBOTG_HS_RX_CORE_FIFO_SZ, USBOTG_HS_GRXFSIZ_RXFD);
-    ctx->fifo_idx +=  USBOTG_HS_RX_CORE_FIFO_SZ;
+    /* PTH: to check: executed at reset handling time: here we set back fifo_idx from
+     * 0 as the device is reset. previously configured FIFO slots are purged and
+     * must be reconfigured using usbotghs_reset_epx_fifo() */
+    ctx->fifo_idx = USBOTG_HS_RX_CORE_FIFO_SZ;
     /* setting TX0FSIZ to */
 
-err:
     return errcode;
 }
 
@@ -211,10 +212,6 @@ err:
     @ requires \valid(ep);
     @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx) ;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx, *ep ;
-
-    @ behavior ctx_null:
-    @   assumes &usbotghs_ctx == \null;
-    @   ensures \result == MBED_ERROR_INVSTATE ;
 
     @ behavior epid_null_NOSTORAGE:
     @   assumes &usbotghs_ctx != \null;
@@ -248,11 +245,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
-    if (ctx == NULL) {
-        log_printf("[USBOTG] ctx null\n");
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
+    /*@ assert ctx != NULL; */
     if (ep->id == 0) {
         /*
          * EndPoint 0 TX FIFO configuration (should store a least 4 64byte paquets)

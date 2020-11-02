@@ -26,7 +26,11 @@
 #include "libc/types.h"
 #include "libc/stdio.h"
 #include "libc/sync.h"
+#ifndef __FRAMAC__
 #include "libc/sanhandlers.h"
+#else
+#include "framac/entrypoint.h"
+#endif
 
 #include "api/libusbotghs.h"
 #include "usbotghs_regs.h"
@@ -114,6 +118,9 @@ static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
 /*
  * Generic handler, used by default.
  */
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t default_handler(void)
 {
     return MBED_ERROR_NONE;
@@ -123,6 +130,9 @@ static mbed_error_t default_handler(void)
  * Reserved handler, should never be executed, as interrupt flag corresponds to
  * 'Reserved' field.
  */
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t reserved_handler(void)
 {
     return MBED_ERROR_UNSUPORTED_CMD;
@@ -175,6 +185,13 @@ static mbed_error_t reset_handler(void)
     log_printf("[USB HS][RESET] received USB Reset\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
+
+    /*@ assert \valid_read(ctx); */
+    /*@
+      @ loop invariant 0 <= i <= USBOTGHS_MAX_OUT_EP;
+      @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+      @ loop variant USBOTGHS_MAX_OUT_EP - i;
+      */
     for (uint8_t i = 0; i < USBOTGHS_MAX_OUT_EP; ++i) {
         /* if Out EPi is configured, set DOEPCTLi.SNAK to 1 */
         if (ctx->out_eps[i].configured) {
@@ -183,6 +200,7 @@ static mbed_error_t reset_handler(void)
                          USBOTG_HS_DOEPCTL_CNAK_Msk);
         }
     }
+
     /* unmask control pipe requested interrupt bits:
      * activate OEPInt, IEPInt & RxFIFO non-empty.
      * Ready to receive requests on EP0.
@@ -368,9 +386,17 @@ static mbed_error_t oepint_handler(void)
                 }
                 if (callback_to_call == true) {
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
+                    if (ctx->out_eps[ep_id].handler == NULL) {
+                        goto err;
+                    }
+#ifndef __FRAMAC__
                     if (handler_sanity_check_with_panic((physaddr_t)ctx->out_eps[ep_id].handler)) {
                         goto err;
                     }
+#endif
+                    /* In FramaC context, upper handler is my_handle_outepevent */
+                    /*@ assert ctx->out_eps[ep_id].handler \in {my_handle_outepevent}; */
+                    /*@ calls my_handle_outepevent; */
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
                     if (end_of_transfer == true && ep_id == 0) {
@@ -516,9 +542,19 @@ static mbed_error_t iepint_handler(void)
                             /* now EP is idle */
                             set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
                             /* inform libctrl of transfert complete */
+
+                            if (ctx->in_eps[ep_id].handler == NULL) {
+                                goto err;
+                            }
+#ifndef __FRAMAC__
                             if (handler_sanity_check((physaddr_t)ctx->in_eps[ep_id].handler)) {
                                 goto err;
                             }
+#endif
+
+                            /* In FramaC context, upper handler is my_handle_inepevent */
+                            /*@ assert ctx->in_eps[ep_id].handler \in {my_handle_inepevent}; */
+                            /*@ calls my_handle_inepevent; */
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
@@ -765,6 +801,10 @@ err:
 /*
  * Start-offrame event (new USB frame)
  */
+
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t sof_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -772,6 +812,9 @@ static mbed_error_t sof_handler(void)
     return errcode;
 }
 
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t otg_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -779,6 +822,9 @@ static mbed_error_t otg_handler(void)
     return errcode;
 }
 
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t mmism_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -790,6 +836,9 @@ static mbed_error_t mmism_handler(void)
  * Early suspend handler. Received when an Idle state has been
  * detected on the USB for 3ms.
  */
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t esuspend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -801,6 +850,9 @@ static mbed_error_t esuspend_handler(void)
  * USB suspend handler. Received when there is no activity on the data
  * lines (including EP0) for a period of 3ms.
  */
+/*@
+  @ assigns \nothing;
+  */
 static mbed_error_t ususpend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;

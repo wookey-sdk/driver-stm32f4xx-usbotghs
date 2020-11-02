@@ -189,6 +189,11 @@ void test_fcn_isr_events(void)
     intmsk = (1 << 13);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
     /* looping on any */
+    /*@
+      @ loop invariant 0 <= i <= 32;
+      @ loop assigns intsts, intmsk, i;
+      @ loop variant 32 - i;
+      */
     for (uint8_t i = 0; i < 32; ++i) {
         intsts = (1 << i);
         intmsk = (1 << i);

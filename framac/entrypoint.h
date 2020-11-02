@@ -39,6 +39,21 @@ static inline mbed_error_t handler_ep(uint32_t dev_id, uint32_t size, uint8_t ep
             return errcode;
 }
 
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t my_handle_inepevent(uint32_t dev_id,
+                                 uint32_t size,
+                                 uint8_t ep);
+
+
+/*@
+  @ assigns \nothing;
+  */
+mbed_error_t my_handle_outepevent(uint32_t dev_id,
+                                  uint32_t size,
+                                  uint8_t ep);
+
 void test_fcn_driver_eva(void) ;
 
 #endif/*!ENTRY_H_*/
