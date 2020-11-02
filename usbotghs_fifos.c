@@ -43,6 +43,14 @@
 /* Hardware IP FIFO size */
 #define CORE_FIFO_LENGTH 4096
 
+/*@
+  @ requires \valid_read((uint8_t*)dest + (0 .. size-1));
+  @ requires size > 0;
+  @ requires 0 <= ep < USBOTGHS_MAX_OUT_EP;
+  @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
+  @ assigns dest[0 .. size-1];
+  @
+  */
 void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
@@ -82,17 +90,17 @@ void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
 }
 
 /*@
-    @ requires ep <= USBOTGHS_MAX_OUT_EP ;
-    @ requires \valid_read(src);
+    @ requires ep <= USBOTGHS_MAX_IN_EP ;
+    @ requires \valid_read(src + (0 .. size-1));
     @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
     @ requires \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
 */
 
-/*  requires ep <= USBOTGHS_MAX_OUT_EP needed for memory space :
-        if ep > USBOTGHS_MAX_OUT_EP, USBOTG_HS_DEVICE_FIFO(ep) >= USB_BACKEND_MEMORY_END
+/*  requires ep <= USBOTGHS_MAX_IN_EP needed for memory space :
+        if ep > USBOTGHS_MAX_IN_EP, USBOTG_HS_DEVICE_FIFO(ep) >= USB_BACKEND_MEMORY_END
         this limit is hardware dependant (even if USBOTGHS_MAX_IN_EP > USBOTGHS_MAX_OUT_EP, it is not possible
-        to handle more than USBOTGHS_MAX_OUT_EP (+ EP0))
+        to handle more than USBOTGHS_MAX_IN_EP (+ EP0))
  */
 static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, uint8_t ep)
 {
@@ -316,6 +324,10 @@ err:
  * 1. Manual recopy
  * 2. DMA recopy
  */
+/*@
+  @ requires \valid(ep);
+  @ assigns *ep, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+  */
 mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -323,6 +335,11 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
     /* sanitation */
     if (ep->configured == false) {
         log_printf("[USBOTG][HS] EPx %d not configured\n", ep->id);
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (ep->fifo == NULL) {
+        log_printf("[USBOTG][HS] EPx %d FIFO not set\n", ep->id);
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
@@ -384,6 +401,11 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, usbotghs_ep_t *ep)
     /* we consider that packet splitting is made by the caller (i.e. usbotghs_send()) */
     /* fixme: size > (USBOTG_HS_TX_CORE_FIFO_SZ - ep->fifo_idx) */
     if (size > USBOTG_HS_TX_CORE_FIFO_SZ) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (ep->fifo == NULL) {
+        log_printf("[USBOTG][HS] EP fifo not set\n");
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }

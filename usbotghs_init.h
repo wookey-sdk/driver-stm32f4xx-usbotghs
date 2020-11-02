@@ -58,8 +58,8 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode);
  */
 
 /*@
-	@ assigns \nothing;
     @ requires \separated(&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+	@ assigns \nothing;
 	@ ensures \result == MBED_ERROR_NONE ;
 @*/
 mbed_error_t usbotghs_initialize_device(void);
