@@ -566,7 +566,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
 #endif
         /* write data from SRC to FIFO */
-        errcode = usbotghs_write_epx_fifo(ep->mpsize, ep);
+        errcode = usbotghs_write_epx_fifo(ep->mpsize, ep->id);
         goto err;
     }
 
@@ -626,7 +626,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         }
 
         /* write data from SRC to FIFO */
-        usbotghs_write_epx_fifo(fifo_size, ep);
+        usbotghs_write_epx_fifo(fifo_size, ep->id);
 
 
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
@@ -669,7 +669,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         log_printf("[USBOTGHS] write %d len data on ep %d core fifo\n", residual_size, ep->id);
-        usbotghs_write_epx_fifo(residual_size, ep);
+        usbotghs_write_epx_fifo(residual_size, ep->id);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
         residual_size = 0;

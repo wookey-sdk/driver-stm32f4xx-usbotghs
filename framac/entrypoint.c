@@ -105,6 +105,7 @@ mbed_error_t my_handle_outepevent(uint32_t dev_id __attribute__((unused)),
  */
 
 mbed_error_t usbctrl_handle_earlysuspend(uint32_t dev_id __attribute__((unused))) {
+    return MBED_ERROR_NONE;
 }
 
 mbed_error_t usbctrl_handle_reset(uint32_t dev_id __attribute__((unused))) {
@@ -219,6 +220,7 @@ void test_fcn_isr_events(void)
 {
     uint32_t intsts = 0;
     uint32_t intmsk = 0;
+    uint8_t resp[1024];
 
     /* TODO: set core register to valid content (or controlled interval) to
      * check all switch/if control cases of handlers */
@@ -241,6 +243,17 @@ void test_fcn_isr_events(void)
         intmsk = (1 << i);
         USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
     }
+
+    usbotghs_configure_endpoint(1,USBOTG_HS_EP_TYPE_BULK, USBOTG_HS_EP_DIR_OUT, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    /* emulate data in recv FIFO (replacing setup pkt content) */
+    usbotghs_set_recv_fifo((uint8_t *)&resp[0], 512, 1);
+    usbotghs_activate_endpoint(1, USB_BACKEND_DRV_EP_DIR_OUT);
+    usbotghs_ctx.out_eps[1].fifo_idx = 256;
+
+    /* handling OEPInt Handler */
+    intsts = (1 << 19);
+    intmsk = (1 << 19);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
 }
 
 void main(void)

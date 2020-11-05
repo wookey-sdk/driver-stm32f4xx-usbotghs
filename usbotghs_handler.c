@@ -181,7 +181,8 @@ static mbed_error_t reserved_handler(void)
  *    except for enabling control OUT endpoint 0 in DMA mode.
  */
 /*@
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.fifo_idx, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.fifo_idx, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
 static mbed_error_t reset_handler(void)
 {
@@ -276,6 +277,11 @@ err:
 /*
  * Enumeration done interrupt handler
  */
+
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.speed;
+  */
 static mbed_error_t enumdone_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -339,6 +345,10 @@ err:
  * In Host mode:
  * OEPINNT is executed when the TxFIFO has been flushed by the core and content sent
  */
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+  */
 static mbed_error_t oepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -352,9 +362,14 @@ static mbed_error_t oepint_handler(void)
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
         log_printf("[USBOTG][HS] handling received data\n");
-        for (int i = 0; daint; i++) {
-            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
-                /* no more HW endpoint to check in this core implementation, leaving */
+        /*@
+          @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_OUT_EP;
+          @ loop assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+          @ loop variant USBOTGHS_MAX_OUT_EP - ep_id;
+          */
+        for (ep_id = 0; ep_id < USBOTGHS_MAX_OUT_EP; ++ep_id) {
+            if (daint == 0) {
+                /* no more EPs to handle */
                 break;
             }
             if (daint & val) {
@@ -402,8 +417,8 @@ static mbed_error_t oepint_handler(void)
                     }
 #endif
                     /* In FramaC context, upper handler is my_handle_outepevent */
-                    /*@ assert ctx->out_eps[ep_id].handler \in {my_handle_outepevent}; */
-                    /*@ calls my_handle_outepevent; */
+                    /*@ assert ctx->out_eps[ep_id].handler \in {my_handle_outepevent, handler_ep}; */
+                    /*@ calls my_handle_outepevent, handler_ep; */
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
                     if (end_of_transfer == true && ep_id == 0) {
@@ -417,7 +432,6 @@ static mbed_error_t oepint_handler(void)
                 /* now that data has been handled, consider FIFO as empty */
                 set_u8_with_membarrier(&(ctx->out_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
             }
-            ep_id++;
             daint >>= 1;
         }
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
@@ -451,6 +465,10 @@ err:
  * In Host mode:
  * IEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
  */
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
+  */
 static mbed_error_t iepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -468,9 +486,14 @@ static mbed_error_t iepint_handler(void)
          */
         uint16_t val = 0x1;
         uint8_t ep_id = 0;
-        for (int i = 0; daint; i++) {
-            if (ep_id >= USBOTGHS_MAX_IN_EP) {
-                /* no more HW endpoint to check in this core implementation, leaving */
+        /*@
+          @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_IN_EP;
+          @ loop assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
+          @ loop variant USBOTGHS_MAX_IN_EP - ep_id;
+          */
+        for (ep_id = 0; ep_id < USBOTGHS_MAX_IN_EP; ++ep_id) {
+            if (daint == 0) {
+                /* no more EPs to handle */
                 break;
             }
             if (daint & val) {
@@ -548,7 +571,7 @@ static mbed_error_t iepint_handler(void)
                             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
                                     USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
                             /* 2. write data to fifo */
-                            usbotghs_write_epx_fifo(ctx->in_eps[ep_id].mpsize, &(ctx->in_eps[ep_id]));
+                            usbotghs_write_epx_fifo(ctx->in_eps[ep_id].mpsize, ep_id);
                         } else {
                             /* now EP is idle */
                             set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
@@ -564,8 +587,8 @@ static mbed_error_t iepint_handler(void)
 #endif
 
                             /* In FramaC context, upper handler is my_handle_inepevent */
-                            /*@ assert ctx->in_eps[ep_id].handler \in {my_handle_inepevent}; */
-                            /*@ calls my_handle_inepevent; */
+                            /*@ assert ctx->in_eps[ep_id].handler \in {my_handle_inepevent, handler_ep}; */
+                            /*@ calls my_handle_inepevent, handler_ep; */
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
@@ -579,21 +602,9 @@ static mbed_error_t iepint_handler(void)
                         set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
                     }
                 }
-#if 0
-                /* handle various events of the current IN EP */
-                /* TxFIFO (half) empty ? */
-                if (diepintx & USBOTG_HS_DIEPINT_TXFE_Msk) {
-                    /* set TxFIFO has (half) empty */
-                    ctx->in_eps[ep_id].core_txfifo_empty = true;
-#if CONFIG_USR_DEV_USBOTGHS_TRIGER_XMIT_ON_HALF
-                    ctx->in_eps[ep_id].state = USBOTG_HS_EP_STATE_DATA_OUT
-#endif
-                }
-#endif
                 /* now that transmit is complete, set ep state as IDLE */
                 /* calling upper handler, transmitted size read from DIEPSTS */
             }
-            ep_id++;
             daint >>= 1;
         }
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
@@ -621,7 +632,15 @@ err:
 
 /*
  * RXFLV handler, This interrupt is executed when the core as written a complete packet in the RxFIFO.
+ *
+ * It is hard, here to define complex function contracts, as behaviors depend on volative values (registers value), which,
+ * by essence, can't be considered as a precondition check.
+ * As a consequence, we only defines the memory separation contsraints and the worst impact (globals updates) of the function.
  */
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+  */
 static mbed_error_t rxflvl_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -926,6 +945,11 @@ static const usb_otg_hs_isr_handler_t usb_otg_hs_isr_handlers[32] = {
 /************************************************
  * About ISR dispatchers
  */
+
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+  */
 void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
                          uint32_t sr,
                          uint32_t dr)
@@ -951,6 +975,7 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
         if (val & 1)
         {
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
+            /* out of __FRAMAC__ case */
             usbotghs_int_cnt[i]++;
 #endif
             /* INFO: as log_printf is a *macro* only resolved by cpp in debug mode,
