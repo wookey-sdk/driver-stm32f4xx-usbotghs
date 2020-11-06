@@ -44,13 +44,13 @@
 #define CORE_FIFO_LENGTH 4096
 
 /*@
-  @ requires \valid((uint8_t*)dest + (0 .. size-1));
+  @ requires size > 0;
+  @ requires \valid(dest + (0 .. size-1));
   @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx, dest);
-  @ assigns dest[0 .. size-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
-  @
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&usbotghs_ctx,dest + (0 .. size-1));
+  @ assigns *(dest + (0 .. size-1)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
-void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
+void usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, uint8_t ep)
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /*
@@ -59,39 +59,68 @@ void usbotghs_read_core_fifo( uint8_t *dest, const uint32_t size, uint8_t ep)
 
 #else
     /* sanitize, as read_core_fifo can be called from handler, with forged content */
-    if (size == 0) {
-        return;
-    }
     if (ep > USBOTGHS_MAX_OUT_EP) {
         return;
     }
     /*
      * With DMA mode deactivated, the copy is done manually
      */
-    uint32_t size_4bytes = size / 4;
+    const uint32_t size_4bytes = size / 4;
     uint32_t tmp;
 
     /* 4 bytes aligned copy from EP FIFO */
-	for (uint32_t i = 0; i < size_4bytes; i++, dest += 4){
-		*(volatile uint32_t *)dest = *(USBOTG_HS_DEVICE_FIFO(ep));
+    uint32_t offset = 0;
+    /*@
+      @ loop invariant 0 <= i <= size_4bytes;
+      @ loop invariant ep <= 3 ;
+      @ loop invariant size > 0;
+      @ loop invariant 0 <= size_4bytes <= size;
+      @ loop invariant \valid(dest + (0 .. size-1));
+      @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
+      @ loop invariant \separated(dest + (0 .. size-1),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
+      @ loop assigns *(dest + (0 .. size-1)), offset, i, tmp;
+      @ loop variant (size_4bytes - i);
+      */
+	for (uint32_t i = 0; i < size_4bytes; i++) {
+        tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
+        /*@ assert offset < (size - 4); */
+		dest[offset + 0] = tmp & 0xff;
+		dest[offset + 1] = (tmp >> 8) & 0xff;
+		dest[offset + 2] = (tmp >> 16) & 0xff;
+		dest[offset + 3] = (tmp >> 24) & 0xff;
+        offset += 4;
+		//old, FRAMAC incompatible cast *(uint32_t *)dest = *(USBOTG_HS_DEVICE_FIFO(ep));
 	}
+    request_data_membarrier();
+    /* @ assert offset == (size - (size % 4));*/
     /* read the residue */
 	switch (size % 4) {
+    case 0:
+        /* @ assert offset == size; */
+        break;
 	case 1:
-		*dest = (*(USBOTG_HS_DEVICE_FIFO(ep))) & 0xff;
+        /* @ assert offset == size-1; */
+		dest[offset] = (*(USBOTG_HS_DEVICE_FIFO(ep))) & 0xff;
 		break;
 	case 2:
-		*(volatile uint16_t *)dest = (*(USBOTG_HS_DEVICE_FIFO(ep))) & 0xffff;
+        /* @ assert offset == size-2; */
+        /* assigned to u32, LSB only set (little endian case !!!) */
+		tmp = *(USBOTG_HS_DEVICE_FIFO(ep)) & 0xffff;
+		dest[offset] = tmp & 0xff;
+		dest[offset + 1] = (tmp >> 8) & 0xff;
 		break;
 	case 3:
+        /* @ assert offset == size-3; */
 		tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
-		dest[0] = tmp & 0xff;
-		dest[1] = (tmp >> 8) & 0xff;
-		dest[2] = (tmp >> 16) & 0xff;
+		dest[offset] = tmp & 0xff;
+		dest[offset + 1] = (tmp >> 8) & 0xff;
+		dest[offset + 2] = (tmp >> 16) & 0xff;
 		break;
 	default:
+        /* should be dead code */
 		break;
 	}
+    request_data_membarrier();
 #endif
 }
 
@@ -734,12 +763,20 @@ err:
 
 }
 
+/*@
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+ */
 mbed_error_t usbotghs_txfifo_flush_all(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
     usbotghs_context_t *ctx = usbotghs_get_context();
     /* Device mode, TxFIFO set in IN EPs */
+    /*@
+        @ loop invariant 0 <= i <= USBOTGHS_MAX_IN_EP;
+        @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+        @ loop variant (USBOTGHS_MAX_IN_EP - i);
+    */
     for (uint8_t i = 0; i < USBOTGHS_MAX_IN_EP; ++i) {
         if (ctx->in_eps[i].configured) {
             usbotghs_txfifo_flush(i);
