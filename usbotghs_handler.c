@@ -785,10 +785,22 @@ static mbed_error_t rxflvl_handler(void)
                     if (epnum != USBOTG_HS_EP0) {
 
                         uint8_t buf[16];
-                        for (; bcnt > 16; bcnt -= 16) {
+                        const uint32_t num_loops = bcnt / 16;
+                        /*@
+                          @ loop invariant 0 <= bcnt <= num_loops;
+                          @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
+                          @ loop invariant (num_loops == (bcnt / 16));
+                          @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
+                          @ loop assigns bcnt, *(buf + (0 .. 15)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+                          @ loop variant (num_loops - i);
+                          */
+                        for (uint16_t i = 0; i < num_loops; i++) {
                             usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                            bcnt -= 16;
                         }
-                        usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                        if (bcnt > 0) {
+                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                        }
 
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
@@ -797,10 +809,23 @@ static mbed_error_t rxflvl_handler(void)
                         /* associated oepint not yet executed, return NYET to host */
                         if (bcnt > 0) {
                             uint8_t buf[16];
-                            for (; bcnt > 16; bcnt -= 16) {
+                            const uint32_t num_loops = bcnt / 16;
+
+                            /*@
+                              @ loop invariant 0 <= bcnt <= num_loops;
+                              @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
+                              @ loop invariant (num_loops == (bcnt / 16));
+                              @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
+                              @ loop assigns bcnt, *(buf + (0 .. 15)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+                              @ loop variant (num_loops - i);
+                              */
+                            for (uint16_t i = 0; i < num_loops; i++) {
                                 usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                                bcnt -= 16;
                             }
-                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                            if (bcnt > 0) {
+                                usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
+                            }
                         }
                         usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         errcode = MBED_ERROR_INVSTATE;
@@ -968,10 +993,18 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
      * Here, for each status flag active, execute the corresponding handler if
      * the global interrupt mask is also enabled
      */
-	for (i = 0; val; i++,val>>=1) {
+    /*@
+      @ loop invariant 0 <= i <= 32;
+      @ loop assigns val, i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+      @ loop variant 32 - i;
+      */
+	for (i = 0; i < 32; i++) {
 		/* Below code is equivalent to
          * calculating (!(intsts & ((uint32_t)1 << i)) || !(intmsk & ((uint32_t)1 << i)))
          */
+        if (val == 0) {
+            break;
+        }
         if (val & 1)
         {
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
@@ -981,8 +1014,13 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
             /* INFO: as log_printf is a *macro* only resolved by cpp in debug mode,
              * usbotghs_int_name is accedded only in this mode. There is no
              * invalid memory access in the other case. */
+
+            /*@ assert usb_otg_hs_isr_handlers[i] \in
+              { default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler }; */
+            /*@ calls default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler; */
             usb_otg_hs_isr_handlers[i]();
         }
+        val >>= 1;
     }
 }
 

@@ -202,11 +202,22 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
 
 	/* Core soft reset must be issued after PHY configuration */
 	/* Wait for AHB master idle */
-    while (!get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_AHBIDL)) {
-        if (++count >  USBOTGHS_REG_CHECK_TIMEOUT) {
-            log_printf("HANG! AHB Idle GRSTCTL:AHBIDL\n");
-            errcode = MBED_ERROR_BUSY;
-            goto err;
+
+    /*@
+        @ loop invariant 0 <= cpt <= CPT_HARD;
+        @ loop assigns cpt;
+        @ loop variant (CPT_HARD - cpt);
+    */
+    for(uint8_t cpt = 0; cpt<CPT_HARD; cpt++) {
+        if (!get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_AHBIDL)) {
+            if (cpt >  USBOTGHS_REG_CHECK_TIMEOUT) {
+                log_printf("HANG! AHB Idle GRSTCTL:AHBIDL\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        } else {
+            /* no more busy */
+            break;
         }
     }
 
@@ -215,15 +226,31 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
 
     count = 0;
     set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, 1, USBOTG_HS_GRSTCTL_CSRST);
-    while (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_CSRST)) {
-        if (++count > USBOTGHS_REG_CHECK_TIMEOUT) {
-            log_printf("HANG! Core Soft RESET\n");
-            errcode = MBED_ERROR_BUSY;
-            goto err;
+
+    /*@
+        @ loop invariant 0 <= cpt <= CPT_HARD;
+        @ loop assigns cpt;
+        @ loop variant (CPT_HARD - cpt);
+    */
+    for(uint8_t cpt = 0; cpt<CPT_HARD; cpt++){
+        if (get_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, USBOTG_HS_GRSTCTL_CSRST)) {
+            if (cpt > USBOTGHS_REG_CHECK_TIMEOUT) {
+                log_printf("HANG! Core Soft RESET\n");
+                errcode = MBED_ERROR_BUSY;
+                goto err;
+            }
+        } else {
+            /* no more busy */
+            break;
         }
     }
     log_printf("[USB HS] Core acknowledged reset after %d loops\n", count);
     /* 3 PHY clocks wait, (active wait here, as sys_sleep() is too slow */
+    /*@
+      @ loop invariant 0 <= i <= 0xff;
+      @ loop assigns \nothing;
+      @ loop variant 0xff - i;
+      */
 	for (uint32_t i = 0; i < 0xff; i++) {
 		continue;
     }

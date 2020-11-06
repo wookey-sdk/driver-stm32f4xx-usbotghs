@@ -47,7 +47,7 @@
 /*@
     @ requires is_valid_dev_mode(mode);
     @ requires \separated(&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
-    @ assigns \nothing  ;
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END))  ;
     @ ensures \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE ;
 */
 mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode);
@@ -59,7 +59,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode);
 
 /*@
     @ requires \separated(&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
-	@ assigns \nothing;
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END))  ;
 	@ ensures \result == MBED_ERROR_NONE ;
 @*/
 mbed_error_t usbotghs_initialize_device(void);
