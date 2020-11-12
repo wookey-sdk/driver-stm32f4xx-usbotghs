@@ -799,6 +799,7 @@ static mbed_error_t rxflvl_handler(void)
                             bcnt -= 16;
                         }
                         if (bcnt > 0) {
+                          /*@ assert bcnt <= 16; */
                             usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
                         }
 

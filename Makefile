@@ -6,7 +6,7 @@
 LIB_NAME ?= libusbotghs
 
 # library name, with extension
-PROJ_FILES = ../../../../
+PROJ_FILES ?= ../../../../
 
 # driver library name, with extension
 LIB_FULL_NAME = $(LIB_NAME).a
