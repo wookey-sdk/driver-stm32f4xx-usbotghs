@@ -53,7 +53,7 @@
                          ctx_list+(..),dest+(..));
   @ assigns *(dest + (0 .. size-1));
   */
-//PMO du size -1 ... 
+
 void usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, uint8_t ep)
 {
 #if CONFIG_USR_DEV_USBOTGHS_DMA
@@ -64,7 +64,7 @@ void usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, uint8_t 
 #else
     /* sanitize, as read_core_fifo can be called from handler, with forged content */
     if (ep > USBOTGHS_MAX_OUT_EP) {
-        return;
+      return;
     }
     /*
      * With DMA mode deactivated, the copy is done manually
@@ -73,72 +73,61 @@ void usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, uint8_t 
     uint32_t tmp;
 
     /* 4 bytes aligned copy from EP FIFO */
-    uint32_t offset_pmo = 0;
-    /*@ assert offset_pmo <= size; */
+    uint32_t offset = 0;
+
     /*@
       @ loop invariant 0 <= i <= size_4bytes;
-      @ loop invariant size > 0;
-      @ loop invariant 0<=offset_pmo <= size ;
+      @ loop invariant size >=0;
+      @ loop invariant \valid(dest + (0 ..size -1)); 
+      @ loop invariant 0<=offset <= size ;
       @ loop invariant 0 <= size_4bytes <= size;
-      @ loop assigns *(dest+(0..offset_pmo-1)),  offset_pmo, i, tmp;
+      @ loop assigns offset, i, tmp;
+      @ loop assigns *(dest+(0..4*size_4bytes -1));
       @ loop variant (size_4bytes - i);
       */
 	for (uint32_t i = 0; i < size_4bytes; i++) {
-          /*@ assert size >=4 ;*/
-          tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
-          /*@ assert size_4bytes >=1 ==> size >=4; */
-          /*@ assert offset_pmo < (size / 4); */
-          dest[offset_pmo + 0] = tmp & 0xff;
-          dest[offset_pmo + 1] = (tmp >> 8) & 0xff;
-          dest[offset_pmo + 2] = (tmp >> 16) & 0xff;
-          dest[offset_pmo + 3] = (tmp >> 24) & 0xff;
-          offset_pmo += 4;
+	  tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
+          /*@ assert size_4bytes >=1 ==> size >=4*size_4bytes; */
+	  dest[offset + 0] = tmp & 0xff;
+          dest[offset + 1] = (tmp >> 8) & 0xff;
+          dest[offset + 2] = (tmp >> 16) & 0xff;
+          dest[offset + 3] = (tmp >> 24) & 0xff;
+          offset += 4;
           //old, FRAMAC incompatible cast *(uint32_t *)dest = *(USBOTG_HS_DEVICE_FIFO(ep));
-          /*@ assert offset_pmo<= 4*size_4bytes; */
+          /*@ assert offset<= 4*size_4bytes; */
 	}
-        /*@ assert offset_pmo <= size;*/
-        /*@ assert offset_pmo == 4*size_4bytes; */
-        /*@ assert size_4bytes == size / 4; */
-        /*@ assert size == (size_4bytes * 4) + (size%4); */
-        /*@ assert size == offset_pmo + (size%4); */
-        /*@ assert offset_pmo == size - (size%4); */
+	/*@ assert offset <= size;*/
+        /*@ assert offset == 4*size_4bytes; */
+	/*@ assert size == (size_4bytes * 4) + (size%4); */
+        /*@ assert offset == size - (size%4); */
         request_data_membarrier();
         /* read the residue */
-
-        /*@ assert (offset_pmo%4) == 0;*/
     switch (size % 4) {
     case 0:
-      /*@ assert offset_pmo <= size ; */
-      /*@ assert offset_pmo <= size ;*/
-      /*@ assert ((size_4bytes == (size / 4))&& (offset_pmo==4*size_4bytes)) ==> offset_pmo == size; */
+      /*@ assert offset <= size ; */
       break;
     case 1:
-      /*@ assert offset_pmo == size-1; */
-      /*@ assert offset_pmo <= size ;*/
-      dest[offset_pmo] = (*(USBOTG_HS_DEVICE_FIFO(ep))) & 0xff;
+      /*@ assert offset == size-1; */
+      dest[offset] = (*(USBOTG_HS_DEVICE_FIFO(ep))) & 0xff;
       break;
     case 2:
-      /*@ assert offset_pmo +1  == size-1; */
-      /*@ assert offset_pmo <= size ;*/
+      /*@ assert offset +1  == size-1; */
       /* assigned to u32, LSB only set (little endian case !!!) */
       tmp = *(USBOTG_HS_DEVICE_FIFO(ep)) & 0xffff;
-      dest[offset_pmo] = tmp & 0xff;
-      dest[offset_pmo + 1] = (tmp >> 8) & 0xff;
+      dest[offset] = tmp & 0xff;
+      dest[offset + 1] = (tmp >> 8) & 0xff;
       break;
     case 3:
-      /*@ assert offset_pmo +2 == size-1; */
-      /*@ assert offset_pmo <= size ;*/
+      /*@ assert offset +2 == size-1; */
       tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
-      dest[offset_pmo] = tmp & 0xff;
-      dest[offset_pmo + 1] = (tmp >> 8) & 0xff;
-      dest[offset_pmo + 2] = (tmp >> 16) & 0xff;
+      dest[offset] = tmp & 0xff;
+      dest[offset + 1] = (tmp >> 8) & 0xff;
+      dest[offset + 2] = (tmp >> 16) & 0xff;
       break;
     default:
       /* should be dead code */
       break;
     }
-    /*@ split offset_pmo ; */
-    /*@ assert offset_pmo <= size ;*/
     request_data_membarrier();
 #endif
 }
