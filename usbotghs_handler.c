@@ -638,7 +638,7 @@ err:
  * As a consequence, we only defines the memory separation contsraints and the worst impact (globals updates) of the function.
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx,&SIZE_DESC_FIXED,&FLAG, ctx_list+(..));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
   */
 static mbed_error_t rxflvl_handler(void)
@@ -684,6 +684,7 @@ static mbed_error_t rxflvl_handler(void)
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
     }
+    /*@ assert 0 <= epnum < USBOTGHS_MAX_OUT_EP; */
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
 # if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
@@ -782,21 +783,34 @@ static mbed_error_t rxflvl_handler(void)
             case PKT_STATUS_SETUP_PKT_RECEIVED:
                 {
                     log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
+                    if (bcnt == 0) {
+                        goto err;
+                    }
+                    /*@ assert bcnt > 0; */
                     if (epnum != USBOTG_HS_EP0) {
 
+                        /* Setup pkt not supported out of EP0 */
                         uint8_t buf[16];
-                        const uint32_t num_loops = bcnt / 16;
+                        const uint32_t initial_bcnt = bcnt;
+                        const uint32_t num_loops = initial_bcnt / 16;
                         /*@
-                          @ loop invariant 0 <= bcnt <= num_loops;
+                          @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(epnum) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
+                          @ loop invariant 0 <= i <= num_loops;
+                          @ loop invariant initial_bcnt > 0;
+                          @ loop invariant num_loops == initial_bcnt / 16;
+                          @ loop invariant \valid(buf + (0 .. 15));
+                          @ loop invariant 0 <= num_loops <= initial_bcnt;
                           @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
-                          @ loop invariant (num_loops == (bcnt / 16));
                           @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-                          @ loop assigns bcnt, *(buf + (0 .. 15)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+                          @ loop assigns bcnt, *(buf + (0 .. 15));
                           @ loop variant (num_loops - i);
                           */
                         for (uint16_t i = 0; i < num_loops; i++) {
+                            /*@ assert num_loops >= 1 ==> initial_bcnt >= 16*num_loops; */
                             usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                            /*@ assert bcnt >= 16; */
                             bcnt -= 16;
+                            /*@ assert bcnt >= 0; */
                         }
                         if (bcnt > 0) {
                           /*@ assert bcnt <= 16; */
@@ -810,19 +824,28 @@ static mbed_error_t rxflvl_handler(void)
                         /* associated oepint not yet executed, return NYET to host */
                         if (bcnt > 0) {
                             uint8_t buf[16];
-                            const uint32_t num_loops = bcnt / 16;
+                            const uint32_t initial_bcnt = bcnt;
+                            const uint32_t num_loops = initial_bcnt / 16;
 
                             /*@
-                              @ loop invariant 0 <= bcnt <= num_loops;
+                              @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(epnum) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
+                              @ loop invariant 0 <= i <= num_loops;
+                              @ loop invariant initial_bcnt > 0;
+                              @ loop invariant num_loops == initial_bcnt / 16;
+                              @ loop invariant initial_bcnt >= 0;
+                              @ loop invariant \valid(buf + (0 .. 15));
+                              @ loop invariant 0 <= num_loops <= initial_bcnt;
                               @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
-                              @ loop invariant (num_loops == (bcnt / 16));
                               @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-                              @ loop assigns bcnt, *(buf + (0 .. 15)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+                              @ loop assigns bcnt, *(buf + (0 .. 15));
                               @ loop variant (num_loops - i);
                               */
                             for (uint16_t i = 0; i < num_loops; i++) {
+                                /*@ assert num_loops >= 1 ==> initial_bcnt >= 16*num_loops; */
                                 usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
+                                /*@ assert bcnt >= 16; */
                                 bcnt -= 16;
+                                /*@ assert bcnt >= 0; */
                             }
                             if (bcnt > 0) {
                                 usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
