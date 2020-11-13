@@ -793,6 +793,9 @@ static mbed_error_t rxflvl_handler(void)
                         uint8_t buf[16];
                         const uint32_t initial_bcnt = bcnt;
                         const uint32_t num_loops = initial_bcnt / 16;
+                        /*@ assert initial_bcnt == bcnt;*/
+                        /*@ assert num_loops >= 1 ==> (initial_bcnt >= (16*num_loops)); */
+                        /*@ assert num_loops >= 1 ==> (initial_bcnt < ((16*num_loops)+16)); */
                         /*@
                           @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(epnum) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
                           @ loop invariant 0 <= i <= num_loops;

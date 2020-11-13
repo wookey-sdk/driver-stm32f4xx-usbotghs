@@ -161,6 +161,9 @@ FRAMAC_EVA_FLAGS:=\
 		    -eva \
 		    -eva-show-perf \
 		    -eva-slevel 500 \
+			-eva-slevel-function rxflvl_handler:20000 \
+			-eva-slevel-function oepint_handler:20000 \
+			-eva-slevel-function iepint_handler:20000 \
 		    -eva-split-limit 256 \
 		    -eva-domains symbolic-locations\
 		    -eva-domains equality \
