@@ -236,7 +236,8 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
 /*@
     @ requires \valid(src);
     @ requires \separated(src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),usbotghs_ctx, usbotghs_ctx.in_eps[ep_id];
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id];
+    @ assigns \result \from ep_id, src, size;
 
     @ behavior bad_ctx:
     @   assumes &usbotghs_ctx == \null ;
@@ -284,18 +285,69 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
  * @return MBED_ERROR_NONE if setup is ok, or various possible other errors (INVSTATE
  * for invalid enpoint type, INVPARAM if dst is NULL or size invalid)
  */
-/*@
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+/*
+    //@ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid];
 
-    @   ensures \result == MBED_ERROR_INVPARAM
+    //@   ensures \result == MBED_ERROR_INVPARAM
     <==> ((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0))
      || (!((usbotghs_ctx.out_eps[epid].configured == \false) || (usbotghs_ctx.out_eps[epid].mpsize == 0)) && size == 0) ;
 
-    @   ensures \result == MBED_ERROR_NONE
+    //@   ensures \result == MBED_ERROR_NONE
     ==> (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize != 0 && size != 0) ;
 
 */
 
+/*@
+  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid];
+
+  @ behavior invdst:
+  @    assumes dst == NULL;
+  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
+  @    ensures \result == MBED_ERROR_INVPARAM;
+
+  @ behavior badepid:
+  @    assumes \valid(dst);
+  @    assumes epid >= USBOTGHS_MAX_OUT_EP;
+  @    ensures \result == MBED_ERROR_INVPARAM;
+  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
+
+  @ behavior epnotconfigured:
+  @    assumes \valid(dst);
+  @    assumes epid < USBOTGHS_MAX_OUT_EP;
+  @    assumes (usbotghs_ctx.out_eps[epid].configured == \false || usbotghs_ctx.out_eps[epid].mpsize == 0);
+  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
+  @    ensures \result == MBED_ERROR_INVPARAM;
+
+  @ behavior badsize:
+  @    assumes \valid(dst);
+  @    assumes epid < USBOTGHS_MAX_OUT_EP;
+  @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
+  @    assumes size == 0;
+  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
+  @    ensures \result == MBED_ERROR_INVPARAM;
+
+  @ behavior epfifolocked:
+  @    assumes \valid(dst);
+  @    assumes epid < USBOTGHS_MAX_OUT_EP;
+  @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
+  @    assumes size > 0;
+  @    assumes usbotghs_ctx.out_eps[epid].fifo_lck == \true;
+  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
+  @    ensures \result == MBED_ERROR_INVSTATE;
+
+  @ behavior ok:
+  @    assumes \valid(dst);
+  @    assumes epid < USBOTGHS_MAX_OUT_EP;
+  @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
+  @    assumes size > 0;
+  @    assumes usbotghs_ctx.out_eps[epid].fifo_lck == \false;
+  @    ensures \result == MBED_ERROR_NONE;
+
+  @ complete behaviors;
+  @ disjoint behaviors;
+
+  */
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
 
 /*
@@ -304,6 +356,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
  /*@
    @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+   @ assigns \result \from ep_id;
    @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_IN_EP) ==> \result == MBED_ERROR_INVPARAM ;
    @ ensures (!CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_OUT_EP) ==> \result == MBED_ERROR_INVPARAM ;
    @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \false)

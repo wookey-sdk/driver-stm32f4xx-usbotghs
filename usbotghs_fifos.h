@@ -54,7 +54,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
 
 mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid);
 
-void usbotghs_read_core_fifo(uint8_t *dest, uint32_t size, uint8_t ep);
+mbed_error_t usbotghs_read_core_fifo(uint8_t *dest, uint32_t size, uint8_t ep);
 
 /* flush the Core TxFIFO of the given EP. This functions does *not* upate the
  * associated EP ctx (fifo_idx, fifo_size) */
