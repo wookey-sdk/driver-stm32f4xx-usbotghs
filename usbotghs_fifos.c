@@ -385,12 +385,16 @@ err:
  * 2. DMA recopy
  */
 /*@
-  @ requires \valid(ep);
-  @ assigns *ep, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+  @ requires 0 <= ep_id < USBOTGHS_MAX_OUT_EP;
+  @ assigns usbotghs_ctx.out_eps[ep_id];
   */
-mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep)
+mbed_error_t usbotghs_read_epx_fifo(uint32_t size, uint8_t ep_id)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    usbotghs_ep_t*      ep = NULL;
+
+    ep = &(ctx->out_eps[ep_id]);
 
     /* sanitation */
     if (ep->configured == false) {
@@ -444,53 +448,47 @@ err:
  */
 
 /*@
-    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo);
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
-
-    @ behavior badep:
-    @    assumes ep_id >= USBOTGHS_MAX_IN_EP;
-    @    ensures usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1] == \old(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1]);
-    @    ensures \result == MBED_ERROR_INVPARAM;
+    @ requires ep_id < USBOTGHS_MAX_IN_EP;
+    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (size-1))));
 
     @ behavior badsize:
-    @    assumes ep_id < USBOTGHS_MAX_IN_EP;
     @    assumes size > USBOTG_HS_TX_CORE_FIFO_SZ;
-    @    ensures usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1] == \old(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1]);
+    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_INVPARAM;
 
 
     @ behavior badfifo:
-    @    assumes ep_id < USBOTGHS_MAX_IN_EP;
     @    assumes size <= USBOTG_HS_TX_CORE_FIFO_SZ;
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo == NULL;
-    @    ensures usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1] == \old(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1]);
+    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_INVPARAM;
 
     @ behavior fifolocked:
-    @    assumes ep_id < USBOTGHS_MAX_IN_EP;
     @    assumes size <= USBOTG_HS_TX_CORE_FIFO_SZ;
-    @    assumes \valid(usbotghs_ctx.in_eps[ep_id].fifo);
+    @    assumes usbotghs_ctx.in_eps[ep_id].fifo != NULL;
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
-    @    ensures usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1] == \old(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1]);
+    @    requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
+    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_INVSTATE;
 
     @ behavior fifotoosmall:
-    @    assumes ep_id < USBOTGHS_MAX_IN_EP;
     @    assumes size <= USBOTG_HS_TX_CORE_FIFO_SZ;
     @    assumes \valid(usbotghs_ctx.in_eps[ep_id].fifo);
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
     @    assumes (size > usbotghs_ctx.in_eps[ep_id].fifo_size || usbotghs_ctx.in_eps[ep_id].fifo_idx  > (usbotghs_ctx.in_eps[ep_id].fifo_size - size));
-    @    ensures usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1] == \old(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1]);
+    @    requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
+    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_NOMEM;
 
 
 
     @ behavior ok:
-    @    assumes ep_id < USBOTGHS_MAX_IN_EP;
     @    assumes size <= USBOTG_HS_TX_CORE_FIFO_SZ;
     @    assumes \valid(usbotghs_ctx.in_eps[ep_id].fifo);
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
     @    assumes (size <= usbotghs_ctx.in_eps[ep_id].fifo_size && usbotghs_ctx.in_eps[ep_id].fifo_idx  <= (usbotghs_ctx.in_eps[ep_id].fifo_size - size));
+    @    requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
     @    ensures \result == MBED_ERROR_NONE;
 
     @ complete behaviors;
@@ -506,11 +504,6 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
 /* sanitation */
     /* we consider that packet splitting is made by the caller (i.e. usbotghs_send()) */
     /* fixme: size > (USBOTG_HS_TX_CORE_FIFO_SZ - ep->fifo_idx) */
-    if (ep_id >= USBOTGHS_MAX_IN_EP) {
-        errcode = MBED_ERROR_INVPARAM;
-        /*@ assert \at(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1],Here) == \at(usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1],Pre);*/
-        goto err;
-    }
     ep = &(ctx->in_eps[ep_id]);
 
     /*@ assert \valid(ep); */

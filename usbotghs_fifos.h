@@ -44,7 +44,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep);
 
 /* FIFO RAM buffers are EP contexts informations, and don't need to be passed as
  * parameters */
-mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep);
+mbed_error_t usbotghs_read_epx_fifo(uint32_t size, uint8_t ep_id);
 
 /* FIFO RAM buffers are EP contexts informations, and don't need to be passed as
  * parameters */

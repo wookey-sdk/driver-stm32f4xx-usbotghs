@@ -166,10 +166,10 @@ FRAMAC_EVA_FLAGS:=\
 			-eva-slevel-function iepint_handler:20000 \
 		    -eva-split-limit 256 \
 		    -eva-domains symbolic-locations\
-		    -eva-domains equality \
-		    -eva-split-return auto \
-		    -eva-partition-history 3 \
-		    -eva-log a:frama-c-rte-eva.log
+			-eva-domains equality \
+			-eva-split-return auto \
+			-eva-partition-history 3 \
+			-eva-log a:frama-c-rte-eva.log
 
 FRAMAC_WP_FLAGS:=\
 	        -wp \
@@ -189,13 +189,13 @@ frama-c-parsing:
 		 -cpp-extra-args="-nostdinc -I framac/include -I api -I $(LIBUSBCTRL_API_DIR) -I $(LIBSTD_API_DIR) -I $(USBOTGHS_DEVHEADER_PATH) -I $(EWOK_API_DIR)"
 
 frama-c-eva:
-	frama-c framac/entrypoint.c usbotghs*.c  -c11 \
+	frama-c framac/entrypoint.c usbotghs*.c ulpi.c -c11 \
 		    $(FRAMAC_GEN_FLAGS) \
 			$(FRAMAC_EVA_FLAGS) \
 			-save $(EVA_SESSION)
 
 frama-c:
-	frama-c framac/entrypoint.c usbotghs*.c -c11 \
+	frama-c framac/entrypoint.c usbotghs*.c ulpi.c -c11 \
 		    $(FRAMAC_GEN_FLAGS) \
 			$(FRAMAC_EVA_FLAGS) \
    		    -then \
@@ -204,7 +204,7 @@ frama-c:
    			-time $(TIMESTAMP)
 
 frama-c-instantiate:
-	frama-c framac/entrypoint.c usbotghs*.c -c11 -machdep x86_32 \
+	frama-c framac/entrypoint.c usbotghs*.c ulpi.c -c11 -machdep x86_32 \
 			$(FRAMAC_GEN_FLAGS) \
 			-instantiate
 

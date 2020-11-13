@@ -248,7 +248,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     /* 3 PHY clocks wait, (active wait here, as sys_sleep() is too slow */
     /*@
       @ loop invariant 0 <= i <= 0xff;
-      @ loop assigns \nothing;
+      @ loop assigns i;
       @ loop variant 0xff - i;
       */
 	for (uint32_t i = 0; i < 0xff; i++) {

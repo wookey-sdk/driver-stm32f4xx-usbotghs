@@ -216,6 +216,11 @@ void test_fcn_driver_eva(void)
 
 }
 
+
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+  */
 void test_fcn_isr_events(void)
 {
     uint32_t intsts = 0;
@@ -225,22 +230,25 @@ void test_fcn_isr_events(void)
     /* TODO: set core register to valid content (or controlled interval) to
      * check all switch/if control cases of handlers */
     /* first reset */
-    intsts = (1 << 12);
-    intmsk = (1 << 12);
+    intsts = (uint32_t)(1 << 12);
+    intmsk = (uint32_t)(1 << 12);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
     /* enumdone */
-    intsts = (1 << 13);
-    intmsk = (1 << 13);
+    intsts = (uint32_t)(1 << 13);
+    intmsk = (uint32_t)(1 << 13);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+    usbotghs_set_address(42);
     /* looping on any */
     /*@
       @ loop invariant 0 <= i <= 32;
-      @ loop assigns intsts, intmsk, i;
+      @ loop assigns intsts, intmsk, i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
       @ loop variant 32 - i;
       */
     for (uint8_t i = 0; i < 32; ++i) {
-        intsts = (1 << i);
-        intmsk = (1 << i);
+        /* @ assert 0 <= i <= 31; */
+        intsts = (uint32_t)(1 << i);
+        intmsk = (uint32_t)(1 << i);
         USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
     }
 
@@ -250,10 +258,14 @@ void test_fcn_isr_events(void)
     usbotghs_activate_endpoint(1, USB_BACKEND_DRV_EP_DIR_OUT);
     usbotghs_ctx.out_eps[1].fifo_idx = 256;
 
+    /* Here we set the EPNum to 1 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 1, USBOTG_HS_GRXSTSP_EPNUM);
+
     /* handling OEPInt Handler */
-    intsts = (1 << 19);
-    intmsk = (1 << 19);
+    intsts = (1 << 19) | (1 << 4);
+    intmsk = (1 << 19) | (1 << 4);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+    return;
 }
 
 void main(void)

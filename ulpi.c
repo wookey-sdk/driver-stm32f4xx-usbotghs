@@ -33,10 +33,10 @@
     @ assigns \nothing ;
     @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INITFAIL ;
 */
-
 mbed_error_t usbotghs_ulpi_reset(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+#ifndef __FRAMAC__
     uint32_t err;
 
 	log_printf("[USB HS] %s\n", __FUNCTION__);
@@ -59,6 +59,7 @@ mbed_error_t usbotghs_ulpi_reset(void)
         goto end;
     }
 end:
+#endif
     return errcode;
 }
 

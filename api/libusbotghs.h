@@ -191,7 +191,7 @@ mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id);
  */
 /*@
   @ requires \separated(&usbotghs_ctx);
-  @ assigns usbotghs_ctx ;
+  @ assigns usbotghs_ctx.dev ;
   @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_UNKNOWN ;
   */
 mbed_error_t usbotghs_declare(void);
@@ -241,13 +241,11 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
 
     @ behavior bad_ctx:
     @   assumes &usbotghs_ctx == \null ;
-    @   assigns \nothing ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
 
     @ behavior bad_ep:
     @   assumes &usbotghs_ctx != \null ;
     @   assumes (ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW) ;
-    @   assigns \nothing ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
 
     @ behavior not_configured:

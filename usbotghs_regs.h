@@ -330,6 +330,8 @@
 #define USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp) ((grxstsp & 0x7ff0) >> 4)
 #define USBOTG_HS_GRXSTSP_GET_EPNUM(grxstsp) (grxstsp & 0xf)
 #define USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp) (grxstsp & 0xf)
+#define USBOTG_HS_GRXSTSP_EPNUM_Pos          0
+#define USBOTG_HS_GRXSTSP_EPNUM_Msk          0xf
 
 
 

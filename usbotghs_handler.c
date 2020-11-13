@@ -364,7 +364,7 @@ static mbed_error_t oepint_handler(void)
         log_printf("[USBOTG][HS] handling received data\n");
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_OUT_EP;
-          @ loop assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+          @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
           @ loop variant USBOTGHS_MAX_OUT_EP - ep_id;
           */
         for (ep_id = 0; ep_id < USBOTGHS_MAX_OUT_EP; ++ep_id) {
@@ -466,7 +466,7 @@ err:
  * IEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
   */
 static mbed_error_t iepint_handler(void)
@@ -488,7 +488,7 @@ static mbed_error_t iepint_handler(void)
         uint8_t ep_id = 0;
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_IN_EP;
-          @ loop assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
+          @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
           @ loop variant USBOTGHS_MAX_IN_EP - ep_id;
           */
         for (ep_id = 0; ep_id < USBOTGHS_MAX_IN_EP; ++ep_id) {
@@ -587,8 +587,8 @@ static mbed_error_t iepint_handler(void)
 #endif
 
                             /* In FramaC context, upper handler is my_handle_inepevent */
-                            /*@ assert ctx->in_eps[ep_id].handler \in {my_handle_inepevent, handler_ep}; */
-                            /*@ calls my_handle_inepevent, handler_ep; */
+                            /*@ assert ctx->in_eps[ep_id].handler \in {usbctrl_handle_inepevent, my_handle_inepevent, handler_ep}; */
+                            /*@ calls usbctrl_handle_inepevent, my_handle_inepevent, handler_ep; */
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
@@ -638,7 +638,7 @@ err:
  * As a consequence, we only defines the memory separation contsraints and the worst impact (globals updates) of the function.
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx,&SIZE_DESC_FIXED,&FLAG, ctx_list+(..));
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
   */
 static mbed_error_t rxflvl_handler(void)
@@ -740,7 +740,7 @@ static mbed_error_t rxflvl_handler(void)
                         goto err;
                     }
                     log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT (size %d) Read EPx FIFO\n", epnum, bcnt);
-                    if (usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum])) != MBED_ERROR_NONE) {
+                    if (usbotghs_read_epx_fifo(bcnt, epnum) != MBED_ERROR_NONE) {
                         /* empty fifo on error */
                         usbotghs_rxfifo_flush(epnum);
                         usbotghs_endpoint_stall(epnum, USBOTG_HS_EP_DIR_OUT);
@@ -805,7 +805,7 @@ static mbed_error_t rxflvl_handler(void)
                           @ loop invariant 0 <= num_loops <= initial_bcnt;
                           @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
                           @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-                          @ loop assigns bcnt, *(buf + (0 .. 15));
+                          @ loop assigns i, bcnt, *(buf + (0 .. 15));
                           @ loop variant (num_loops - i);
                           */
                         for (uint16_t i = 0; i < num_loops; i++) {
@@ -840,7 +840,7 @@ static mbed_error_t rxflvl_handler(void)
                               @ loop invariant 0 <= num_loops <= initial_bcnt;
                               @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
                               @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-                              @ loop assigns bcnt, *(buf + (0 .. 15));
+                              @ loop assigns i, bcnt, *(buf + (0 .. 15));
                               @ loop variant (num_loops - i);
                               */
                             for (uint16_t i = 0; i < num_loops; i++) {
@@ -864,7 +864,7 @@ static mbed_error_t rxflvl_handler(void)
                     }
                     /* INFO: here, We don't check the setup pkt size, this is under the responsability of the
                      * control plane, as the setup pkt size is USB-standard defined, not driver specific */
-                    usbotghs_read_epx_fifo(bcnt, &(ctx->out_eps[epnum]));
+                    usbotghs_read_epx_fifo(bcnt, epnum);
                     // TODO: read_fifo(setup_packet, bcnt, epnum);
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */
@@ -1034,6 +1034,7 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
         }
         if (val & 1)
         {
+            /*@ assert i < 32; */
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
             /* out of __FRAMAC__ case */
             usbotghs_int_cnt[i]++;
@@ -1043,8 +1044,8 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
              * invalid memory access in the other case. */
 
             /*@ assert usb_otg_hs_isr_handlers[i] \in
-              { default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler }; */
-            /*@ calls default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler; */
+              { default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, ususpend_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler }; */
+            /*@ calls default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, ususpend_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler; */
             usb_otg_hs_isr_handlers[i]();
         }
         val >>= 1;
