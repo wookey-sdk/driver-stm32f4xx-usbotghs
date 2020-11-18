@@ -112,7 +112,11 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     log_printf("[USB HS] initializing the core\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
     int count = 0;
-    volatile uint32_t reg_value;
+#ifndef __FRAMAC__
+    /* PTH: FIXME: determining why assign is not valid */
+    volatile
+#endif
+    uint32_t reg_value;
 
     /* 1. Read the User Hardware Configuration registers
      *
@@ -248,7 +252,7 @@ mbed_error_t usbotghs_initialize_core(usbotghs_dev_mode_t mode)
     /* 3 PHY clocks wait, (active wait here, as sys_sleep() is too slow */
     /*@
       @ loop invariant 0 <= i <= 0xff;
-      @ loop assigns \nothing;
+      @ loop assigns i;
       @ loop variant 0xff - i;
       */
 	for (uint32_t i = 0; i < 0xff; i++) {

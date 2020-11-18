@@ -50,7 +50,7 @@
 
 static const struct user_driver_device_infos usb_otg_hs_dev_infos = {
     .address = 0x40040000,
-    .size    = 0x4000,
+    .size    = 0x40000,
     .id      = 7,
     .gpios = {
       { GPIO_PA, 3 },

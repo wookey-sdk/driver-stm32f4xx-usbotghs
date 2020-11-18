@@ -33,7 +33,6 @@
     @ assigns \nothing ;
     @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INITFAIL ;
 */
-
 mbed_error_t usbotghs_ulpi_reset(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -44,8 +43,6 @@ mbed_error_t usbotghs_ulpi_reset(void)
 	/* Resetting the ULPI PHY is performed by setting the PE13 pin to 1 during
 	 * some milliseconds.
 	 */
-    /* TODO: the PHY GPIOs should be defined through a generated header,
-     * not hardcoded */
 	if ((err = sys_cfg(CFG_GPIO_SET, (uint8_t)(((usb_otg_hs_dev_infos.gpios[USB_HS_RESET].port << 4) + usb_otg_hs_dev_infos.gpios[USB_HS_RESET].pin)), 1)) != SYS_E_DONE) {
         errcode = MBED_ERROR_INITFAIL;
         log_printf("failed to reset ULPI: GPIO set syscall returns %d\n", err);
@@ -58,7 +55,9 @@ mbed_error_t usbotghs_ulpi_reset(void)
         log_printf("failed to reset ULPI: GPIO clear syscall returns %d\n", err);
         goto end;
     }
+    /*@ assert errcode == MBED_ERROR_NONE; */
 end:
+    /* @ assert (errcode == MBED_ERROR_NONE || errcode == MBED_ERROR_INITFAIL); */
     return errcode;
 }
 

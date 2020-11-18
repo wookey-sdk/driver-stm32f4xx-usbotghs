@@ -144,7 +144,7 @@ JOBS        := $(shell nproc)
 TIMEOUT     := 15
 
 FRAMAC_GEN_FLAGS:=\
-			-absolute-valid-range 0x40040000-0x40044000 \
+			-absolute-valid-range 0x40040000-0x40080000 \
 			-no-frama-c-stdlib \
 	        -warn-left-shift-negative \
 	        -warn-right-shift-negative \
@@ -162,6 +162,9 @@ FRAMAC_EVA_FLAGS:=\
 		    -eva \
 		    -eva-show-perf \
 		    -eva-slevel 500 \
+			-eva-slevel-function rxflvl_handler:20000 \
+			-eva-slevel-function oepint_handler:20000 \
+			-eva-slevel-function iepint_handler:20000 \
 		    -eva-split-limit 256 \
 		    -eva-domains symbolic-locations\
 		    -eva-domains equality \
@@ -169,6 +172,7 @@ FRAMAC_EVA_FLAGS:=\
 		    -eva-partition-history 3 \
 		    -eva-log a:frama-c-rte-eva.log\
 		    -eva-report-red-statuses $(EVAREPORT)
+
 
 FRAMAC_WP_FLAGS:=\
 	        -wp \
@@ -188,7 +192,7 @@ frama-c-parsing:
 		 -cpp-extra-args="-nostdinc -I framac/include -I api -I $(LIBUSBCTRL_API_DIR) -I $(LIBSTD_API_DIR) -I $(USBOTGHS_DEVHEADER_PATH) -I $(EWOK_API_DIR)"
 
 frama-c-eva:
-	frama-c framac/entrypoint.c usbotghs*.c  -c11 \
+	frama-c framac/entrypoint.c usbotghs*.c ulpi.c -c11 \
 		    $(FRAMAC_GEN_FLAGS) \
 			$(FRAMAC_EVA_FLAGS) \
 			-save $(EVA_SESSION)
@@ -204,7 +208,7 @@ frama-c:
 		-then -report -report-classify
 
 frama-c-instantiate:
-	frama-c framac/entrypoint.c usbotghs*.c -c11 -machdep x86_32 \
+	frama-c framac/entrypoint.c usbotghs*.c ulpi.c -c11 -machdep x86_32 \
 			$(FRAMAC_GEN_FLAGS) \
 			-instantiate
 

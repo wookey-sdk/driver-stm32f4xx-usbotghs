@@ -44,7 +44,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep);
 
 /* FIFO RAM buffers are EP contexts informations, and don't need to be passed as
  * parameters */
-mbed_error_t usbotghs_read_epx_fifo(uint32_t size, usbotghs_ep_t *ep);
+mbed_error_t usbotghs_read_epx_fifo(uint32_t size, uint8_t ep_id);
 
 /* FIFO RAM buffers are EP contexts informations, and don't need to be passed as
  * parameters */
@@ -54,7 +54,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
 
 mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid);
 
-void usbotghs_read_core_fifo(uint8_t *dest, uint32_t size, uint8_t ep);
+mbed_error_t usbotghs_read_core_fifo(uint8_t *dest, uint32_t size, uint8_t ep);
 
 /* flush the Core TxFIFO of the given EP. This functions does *not* upate the
  * associated EP ctx (fifo_idx, fifo_size) */
@@ -65,5 +65,7 @@ mbed_error_t usbotghs_txfifo_flush(uint8_t ep_id);
 mbed_error_t usbotghs_txfifo_flush_all(void);
 
 mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id);
+
+mbed_error_t usbotghs_is_epx_fifo_valid(uint32_t size, uint8_t ep_id, uint8_t ep_dir);
 
 #endif/*!USBOTGHS_FIFOS_H_*/

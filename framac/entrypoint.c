@@ -141,6 +141,21 @@ mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id __attribute__((unused))) {
 
 */
 
+uint8_t resp[4096];
+
+void init_driver(void)
+{
+    uint8_t ep_id = Frama_C_interval_8(0,255);
+    usbotghs_ep_type_t type = Frama_C_interval_8(0,3);
+    usbotghs_dev_mode_t mode = Frama_C_interval_8(0,1);
+    usbotghs_ep_dir_t dir = Frama_C_interval_8(0,1);
+
+    usbotghs_declare();
+    usbotghs_configure(mode, & usbctrl_handle_inepevent,& usbctrl_handle_outepevent);
+
+    usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+}
+
 void test_fcn_driver_eva(void)
 {
 
@@ -148,22 +163,15 @@ void test_fcn_driver_eva(void)
     uint8_t ep_num = Frama_C_interval_8(0,255);
     uint8_t dir8 = Frama_C_interval_8(0,255);
     uint8_t dst = Frama_C_interval_8(0,255);
-    uint32_t size = Frama_C_interval_32(0,4294967295);
-    uint8_t fifo = Frama_C_interval_8(0,255);
-    uint32_t fifo_idx = Frama_C_interval_32(0,4294967295);
-    uint32_t fifo_size = Frama_C_interval_32(0,4294967295);
+    uint32_t size = Frama_C_interval_32(64,4096);
     usbotghs_epx_mpsize_t size_ep = Frama_C_interval_8(0,3);
+    usbotghs_dev_mode_t mode = Frama_C_interval_8(0,1);
 
     uint8_t src = 1 ;
 
-    usbotghs_ep_dir_t dir = Frama_C_interval_8(0,1);
+    usbotghs_ep_dir_t dir = Frama_C_interval_8(0,2);
     usbotghs_ep_type_t type = Frama_C_interval_8(0,3);
     usbotghs_ep_state_t state = Frama_C_interval_8(0,9) ;
-    usbotghs_dev_mode_t mode = Frama_C_interval_8(0,1);
-
-    usbotghs_declare();
-    usbotghs_configure(mode, & usbctrl_handle_inepevent,& usbctrl_handle_outepevent);
-
 
     usbotghs_global_stall() ;
     usbotghs_endpoint_set_nak(ep_id, dir) ;
@@ -180,34 +188,75 @@ void test_fcn_driver_eva(void)
     usbotghs_endpoint_stall(ep_id, dir) ;
     usbotghs_get_ep_state(ep_id, dir) ;
 
-    usbotghs_ctx.in_eps[EP0].mpsize = Frama_C_interval_16(0,65535);
-    uint8_t resp[1024] = { 0 };
+    usb_backend_drv_send_data((uint8_t *)&resp, 512, EP0);
+    usb_backend_drv_send_data((uint8_t *)&resp, 1024, EP0);
+#if 0
+    //usbotghs_ctx.in_eps[EP0].mpsize = Frama_C_interval_16(0,65535);
+    /* manual lock update for reentrency test purpose only */
     usbotghs_ctx.in_eps[EP0].fifo_lck = 1 ;
     usb_backend_drv_send_data((uint8_t *)&resp, size, EP0);
     usbotghs_ctx.in_eps[EP0].fifo_lck = 0 ;
-    usb_backend_drv_send_data((uint8_t *)&resp, 514, EP0);
+
+    usb_backend_drv_send_data((uint8_t *)&resp, 512, EP0);
+    /* manual set of EP 4 */
     usbotghs_ctx.in_eps[4].mpsize = Frama_C_interval_16(0,65535);
     usbotghs_ctx.in_eps[4].id = 4 ;
     usbotghs_ctx.in_eps[4].fifo_lck = 0 ;
     usbotghs_ctx.in_eps[4].configured = 1 ;
+    /* send data on EP 4 */
+
     usb_backend_drv_send_data((uint8_t *)&resp, size, 4);
+#endif
+    /* send data on invalid EP */
     usb_backend_drv_send_data((uint8_t *)&resp, size, 8);
-    usbotghs_send_zlp(ep_id);
-    usbotghs_txfifo_flush(ep_id);
+
+    usb_backend_drv_configure_endpoint(1,type,USB_BACKEND_DRV_EP_DIR_OUT, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+
+    usbotghs_send_zlp(1);
+    usbotghs_send_zlp(0);
+
+    if (ep_id < USBOTGHS_MAX_IN_EP) {
+        /* txfifo_flush is an internal funtion, ep_id is required as < MAX_IN_EP */
+        usbotghs_txfifo_flush(ep_id);
+    }
+#if 0
+    /* representative of EP MPSize standard for ctrl EP */
+    usbotghs_ctx.in_eps[EP0].mpsize = 64;
+
     usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usb_backend_drv_configure_endpoint(ep_id,type,dir,128,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usb_backend_drv_configure_endpoint(ep_id,type,dir,512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usb_backend_drv_configure_endpoint(ep_id,type,dir,1024,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usbotghs_configure(mode, & my_handle_inepevent,& my_handle_outepevent);
+#endif
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 0);
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 1);
+    usbotghs_is_epx_fifo_valid(size, 0, USBOTG_HS_EP_DIR_OUT);
+    usbotghs_is_epx_fifo_valid(size, 1, USBOTG_HS_EP_DIR_OUT);
 
+#if 0
     usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
-    usbotghs_set_recv_fifo((uint8_t *)&resp, 128, 0);
+#endif
+    /* error cases */
+    usbotghs_set_recv_fifo(NULL, 128, 0);
+    usbotghs_set_recv_fifo(NULL, 128, 8);
+    usbotghs_set_recv_fifo((uint8_t *)&resp, 0, 0);
 
-    usb_backend_drv_configure_endpoint(1,type,USB_BACKEND_DRV_EP_DIR_OUT, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
-    usbotghs_set_recv_fifo((uint8_t *)&resp, 512, 1);
+    /* valid case */
+    usbotghs_set_recv_fifo((uint8_t *)&resp, 128, 0);
+    usb_backend_drv_send_data((uint8_t *)&resp, 512, EP0);
+
+    /* EP 1 */
+    usbotghs_configure_endpoint(1,type,USB_BACKEND_DRV_EP_DIR_OUT, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usbotghs_activate_endpoint(1, USB_BACKEND_DRV_EP_DIR_OUT);
+    usbotghs_read_epx_fifo(0, 1);
+    /* reading 0 bytes from EP 1 */
+    /* EP 2 */
+    usbotghs_configure_endpoint(2,type,USB_BACKEND_DRV_EP_DIR_IN, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    usbotghs_set_recv_fifo((uint8_t *)&resp, 512, 2);
+    usbotghs_activate_endpoint(2, USB_BACKEND_DRV_EP_DIR_IN);
+    usb_backend_drv_send_data((uint8_t *)&resp, 512, 2);
+
 
 
     /*
@@ -216,31 +265,45 @@ void test_fcn_driver_eva(void)
 
 }
 
+
+/*@
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+  */
 void test_fcn_isr_events(void)
 {
     uint32_t intsts = 0;
     uint32_t intmsk = 0;
-    uint8_t resp[1024];
 
     /* TODO: set core register to valid content (or controlled interval) to
      * check all switch/if control cases of handlers */
     /* first reset */
-    intsts = (1 << 12);
-    intmsk = (1 << 12);
+    intsts = (uint32_t)(1 << 12);
+    intmsk = (uint32_t)(1 << 12);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
     /* enumdone */
-    intsts = (1 << 13);
-    intmsk = (1 << 13);
+    intsts = (uint32_t)(1 << 13);
+    intmsk = (uint32_t)(1 << 13);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+    usbotghs_set_address(42);
+
+    /* set recv FIFO for EP0 */
+    usbotghs_set_recv_fifo((uint8_t *)&resp[0], 512, 0);
     /* looping on any */
+
+    /* set amount to read to 2048 for EP1 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 1, USBOTG_HS_GRXSTSP_EPNUM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 2048, USBOTG_HS_GRXSTSP_BCNT);
     /*@
-      @ loop invariant 0 <= i <= 32;
-      @ loop assigns intsts, intmsk, i;
-      @ loop variant 32 - i;
+      @ loop invariant 0 <= i <= 31;
+      @ loop assigns intsts, intmsk, i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+      @ loop variant 31 - i;
       */
-    for (uint8_t i = 0; i < 32; ++i) {
-        intsts = (1 << i);
-        intmsk = (1 << i);
+    for (uint8_t i = 0; i < 31; ++i) {
+        /* @ assert 0 <= i <= 31; */
+        intsts = (uint32_t)(1 << i);
+        intmsk = (uint32_t)(1 << i);
         USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
     }
 
@@ -250,14 +313,50 @@ void test_fcn_isr_events(void)
     usbotghs_activate_endpoint(1, USB_BACKEND_DRV_EP_DIR_OUT);
     usbotghs_ctx.out_eps[1].fifo_idx = 256;
 
+    /* Here we set the EPNum to 1, bcnt=512 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 1, USBOTG_HS_GRXSTSP_EPNUM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 512, USBOTG_HS_GRXSTSP_BCNT);
+
     /* handling OEPInt Handler */
-    intsts = (1 << 19);
-    intmsk = (1 << 19);
+    intsts = (1 << 19) | (1 << 4);
+    intmsk = (1 << 19) | (1 << 4);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+    /* Here we set the EPNum to 1, bcnt=16 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 1, USBOTG_HS_GRXSTSP_EPNUM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 16, USBOTG_HS_GRXSTSP_BCNT);
+
+    /* handling OEPInt Handler */
+    intsts = (1 << 19) | (1 << 4);
+    intmsk = (1 << 19) | (1 << 4);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+    /* Here we set the EPNum to 1, bcnt=6 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 1, USBOTG_HS_GRXSTSP_EPNUM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 6, USBOTG_HS_GRXSTSP_BCNT);
+
+    /* handling OEPInt Handler */
+    intsts = (1 << 19) | (1 << 4);
+    intmsk = (1 << 19) | (1 << 4);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+    /* Here we set the EPNum to 1, bcnt=5 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 1, USBOTG_HS_GRXSTSP_EPNUM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 5, USBOTG_HS_GRXSTSP_BCNT);
+
+    /* handling OEPInt Handler */
+    intsts = (1 << 19) | (1 << 4);
+    intmsk = (1 << 19) | (1 << 4);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+
+
+    return;
 }
 
 void main(void)
 {
+    init_driver();
     test_fcn_driver_eva() ;
     test_fcn_isr_events() ;
 }
