@@ -310,20 +310,17 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
 
   @ behavior invdst:
   @    assumes dst == NULL;
-  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
   @    ensures \result == MBED_ERROR_INVPARAM;
 
   @ behavior badepid:
   @    assumes \valid(dst);
   @    assumes epid >= USBOTGHS_MAX_OUT_EP;
   @    ensures \result == MBED_ERROR_INVPARAM;
-  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
 
   @ behavior epnotconfigured:
   @    assumes \valid(dst);
   @    assumes epid < USBOTGHS_MAX_OUT_EP;
   @    assumes (usbotghs_ctx.out_eps[epid].configured == \false || usbotghs_ctx.out_eps[epid].mpsize == 0);
-  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
   @    ensures \result == MBED_ERROR_INVPARAM;
 
   @ behavior badsize:
@@ -331,7 +328,6 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
   @    assumes epid < USBOTGHS_MAX_OUT_EP;
   @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
   @    assumes size == 0;
-  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
   @    ensures \result == MBED_ERROR_INVPARAM;
 
   @ behavior epfifolocked:
@@ -340,7 +336,6 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
   @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
   @    assumes size > 0;
   @    assumes usbotghs_ctx.out_eps[epid].fifo_lck == \true;
-  @    ensures usbotghs_ctx.out_eps[epid] == \old(usbotghs_ctx.out_eps[epid]);
   @    ensures \result == MBED_ERROR_INVSTATE;
 
   @ behavior ok:

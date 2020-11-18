@@ -512,14 +512,12 @@ err:
 
     @ behavior badfifo:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo == NULL;
-    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_INVPARAM;
 
     @ behavior fifolocked:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo != NULL;
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
     @    requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
-    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_INVSTATE;
 
     @ behavior fifotoosmall:
@@ -527,7 +525,6 @@ err:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
     @    assumes (size > usbotghs_ctx.in_eps[ep_id].fifo_size || usbotghs_ctx.in_eps[ep_id].fifo_idx  > (usbotghs_ctx.in_eps[ep_id].fifo_size - size));
     @    requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
-    @    ensures usbotghs_ctx.in_eps[ep_id] == \old(usbotghs_ctx.in_eps[ep_id]);
     @    ensures \result == MBED_ERROR_NOMEM;
 
     @ behavior ok:
@@ -567,11 +564,16 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
-    if ((size > ep->fifo_size) || (ep->fifo_idx > (ep->fifo_size - size))) {
+    if (size > ep->fifo_size) {
         /* this should be unreachable code, as fifo_size, fifo_idx and size are correlated and controled by the caller */
         /* Again, we may imagine a concurrent thread upgrading the FIFO somewhere during the caller's execution. Thus
          * this is an abnormal usage of the various stacks */
         /*@ assert \false; */
+        log_printf("USBOTG][HS] buf overflow detected!\n");
+        errcode = MBED_ERROR_NOMEM;
+        goto err;
+    }
+    if (ep->fifo_idx > (ep->fifo_size - size)) {
         log_printf("USBOTG][HS] buf overflow detected!\n");
         errcode = MBED_ERROR_NOMEM;
         goto err;
@@ -617,12 +619,10 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 
     if (dst == NULL) {
         errcode = MBED_ERROR_INVPARAM;
-        /*@ assert \at(usbotghs_ctx.out_eps[epid],Here) == \at(usbotghs_ctx.out_eps[epid],Pre); */
         goto err;
     }
     if (epid >= USBOTGHS_MAX_OUT_EP) {
         errcode = MBED_ERROR_INVPARAM;
-        /*@ assert \at(usbotghs_ctx.out_eps[epid],Here) == \at(usbotghs_ctx.out_eps[epid],Pre); */
         goto err;
     }
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
@@ -634,14 +634,12 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 #endif
     if (!ep->configured || !ep->mpsize ) {  // ep->mpsize check to avoid RTE later
         errcode = MBED_ERROR_INVPARAM;
-        /*@ assert \at(usbotghs_ctx.out_eps[epid],Here) == \at(usbotghs_ctx.out_eps[epid],Pre); */
         goto err;
     }
 
     if (size == 0) {
         printf("[USBOTG] try to set FIFO of size 0\n");
         errcode = MBED_ERROR_INVPARAM;
-        /*@ assert \at(usbotghs_ctx.out_eps[epid],Here) == \at(usbotghs_ctx.out_eps[epid],Pre); */
         goto err;
     }
 #if CONFIG_USR_DEV_USBOTGHS_DMA
@@ -649,14 +647,12 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
         /* a DMA transaction is currently being executed toward the recv FIFO.
          * Wait for it to finish before resetting it */
         errcode = MBED_ERROR_INVSTATE;
-        /*@ assert \at(usbotghs_ctx.out_eps[epid],Here) == \at(usbotghs_ctx.out_eps[epid],Pre); */
         goto err;
     }
 #endif
     if (ep->fifo_lck == true) {
         /* Recv FIFO is currently being proceeded ! */
         errcode = MBED_ERROR_INVSTATE;
-        /*@ assert \at(usbotghs_ctx.out_eps[epid],Here) == \at(usbotghs_ctx.out_eps[epid],Pre); */
         goto err;
     }
 
