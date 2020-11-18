@@ -202,7 +202,7 @@ mbed_error_t usbotghs_declare(void);
  */
 /*@
   @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
-  @ assigns usbotghs_ctx \from indirect:ieph, indirect:oeph;
+  @ assigns usbotghs_ctx \from indirect:mode;
   @ assigns usbotghs_ctx,  *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
   @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_INITFAIL
   || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_UNSUPORTED_CMD || \result == MBED_ERROR_NOMEM ;
@@ -237,7 +237,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     @ requires \valid(src);
     @ requires \separated(src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id];
-    @ assigns \result \from ep_id, src, size;
+    @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
 
     @ behavior bad_ctx:
     @   assumes &usbotghs_ctx == \null ;
@@ -298,6 +298,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
 /*@
   @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid];
+  @ assigns \result \from indirect:epid, indirect:dst, indirect:size;
 
   @ behavior invdst:
   @    assumes dst == NULL;
@@ -354,7 +355,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
  /*@
    @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
-   @ assigns \result \from ep_id;
+   @ assigns \result \from indirect:ep_id;
    @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_IN_EP) ==> \result == MBED_ERROR_INVPARAM ;
    @ ensures (!CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_OUT_EP) ==> \result == MBED_ERROR_INVPARAM ;
    @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \false)
@@ -390,6 +391,8 @@ mbed_error_t usbotghs_global_stall_clear(void);
  */
 /*@
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @ assigns \result \from indirect:ep_id, indirect:dir;
+
   @ ensures (&usbotghs_ctx == \null) ==> (\result == MBED_ERROR_INVSTATE) ;
   @ ensures ((&usbotghs_ctx == \null) && (dir == USBOTG_HS_EP_DIR_IN )) ==>
   (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_NONE ||  \result == MBED_ERROR_BUSY ) ;
@@ -403,13 +406,14 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir);
  * Clear the STALL mode for the given EP
  */
 /*@
-  @ ensures \result == MBED_ERROR_NONE ;
   @ assigns \nothing ;
+  @ ensures \result == MBED_ERROR_NONE ;
   */
 mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir);
 
 /*@
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @ assigns \result \from indirect:ep_id, indirect:dir;
   @ ensures (&usbotghs_ctx == \null) ==> \result == MBED_ERROR_INVSTATE ;
   @ ensures (&usbotghs_ctx != \null) ==> ( \result == MBED_ERROR_INVPARAM ||
   \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_BUSY || \result ==MBED_ERROR_NONE  ) ;
@@ -422,6 +426,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
 /*@
   @   requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
   @   assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @   assigns \result \from indirect:ep_id, indirect:dir;
 
   @ behavior bad_ctx:
   @   assumes &usbotghs_ctx == \null ;
@@ -484,32 +489,45 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
 /*@
   @ requires \separated(&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)], usbotghs_ctx, usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)] ;
+  @ assigns \result \from indirect:ep, indirect:dir;
 
-  @ behavior bad_ctx:
-  @   assumes &usbotghs_ctx == \null ;
-  @   ensures \result == MBED_ERROR_INVSTATE ;
-
-  @ behavior USBOTG_HS_EP_DIR_IN:
-  @   assumes &usbotghs_ctx != \null ;
+  @ behavior invalid_in_ep:
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
-  @   ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_NOSTORAGE ;
+  @   assumes ep >= USBOTGHS_MAX_IN_EP;
+  @   ensures \result == MBED_ERROR_NOSTORAGE;
 
-  @ behavior USBOTG_HS_EP_DIR_OUT:
-  @   assumes &usbotghs_ctx != \null ;
+  @ behavior invalid_out_ep:
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
-  @   ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_NOSTORAGE ;
+  @   assumes ep >= USBOTGHS_MAX_OUT_EP;
+  @   ensures \result == MBED_ERROR_NOSTORAGE;
+
+  @ behavior invalid_both_ep:
+  @   assumes dir == USBOTG_HS_EP_DIR_BOTH ;
+  @   assumes (ep >= USBOTGHS_MAX_OUT_EP || ep >= USBOTGHS_MAX_IN_EP);
+  @   ensures \result == MBED_ERROR_NOSTORAGE;
 
   @ behavior default:
-  @   assumes &usbotghs_ctx != \null ;
-  @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN  ;
-  @   ensures \result == MBED_ERROR_NONE ;
+  @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_BOTH ;
+  @   ensures \result == MBED_ERROR_INVPARAM ;
+
+  @ behavior ok_in:
+  @   assumes dir == USBOTG_HS_EP_DIR_IN ;
+  @   assumes ep < USBOTGHS_MAX_IN_EP;
+  @   ensures \result == MBED_ERROR_NONE;
+
+  @ behavior ok_out:
+  @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
+  @   assumes ep < USBOTGHS_MAX_OUT_EP;
+  @   ensures \result == MBED_ERROR_NONE;
+
+  @ behavior ok_both:
+  @   assumes dir == USBOTG_HS_EP_DIR_BOTH ;
+  @   assumes (ep < USBOTGHS_MAX_OUT_EP && ep < USBOTGHS_MAX_OUT_EP);
+  @   ensures \result == MBED_ERROR_NONE;
 
   @ complete behaviors ;
   @ disjoint behaviors ;
   */
-/*
-TODO : be more precise with behavior based on ep number
-*/
 mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
                                          usbotghs_ep_type_t    type,
                                          usbotghs_ep_dir_t     dir,
@@ -524,6 +542,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
   @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   // @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+  @ assigns \result \from indirect:ep;
 
   @ behavior badep:
   @    assumes ep >= USBOTGHS_MAX_IN_EP;
@@ -544,7 +563,7 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
  */
 /*@
   @  assigns *(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)) ;
-  @  assigns *(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)) ;
+  @ assigns \result \from indirect:ep_id, indirect:dir;
 
   @ behavior badctx:
   @    assumes &usbotghs_ctx == \null ;
@@ -598,6 +617,7 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               ep_id,
 /*@
     @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
     @    assumes (dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_OUT);
@@ -627,6 +647,7 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep_id,
 /*@
     @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
     @    assumes (dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_OUT);
@@ -657,6 +678,7 @@ mbed_error_t usbotghs_endpoint_disable(uint8_t               ep_id,
 /*@
     @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
     @    assumes (dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_OUT);
@@ -695,7 +717,7 @@ void usbotghs_unbind(void);
 
 /*@
 
-  @  assigns \nothing ;
+  @  assigns \result \from indirect:epnum, indirect:dir;
 
   @ behavior DIR_IN_EPNUM_BIG:
   @   assumes (dir == USBOTG_HS_EP_DIR_IN && epnum >= USBOTGHS_MAX_IN_EP);

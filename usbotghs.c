@@ -1033,11 +1033,6 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
     log_printf("[USBOTGHS] configure EP %d: dir %d, mpsize %d, type %x\n", ep, dir, mpsize, type);
     usbotghs_context_t *ctx = usbotghs_get_context();
     /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
-
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             log_printf("[USBOTGHS] enable EP %d: dir IN, mpsize %d, type %x\n", ep, mpsize, type);
@@ -1060,17 +1055,8 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             /* set EP configuration */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), type,USBOTG_HS_DIEPCTL_EPTYP_Msk,USBOTG_HS_DIEPCTL_EPTYP_Pos);
 
-#if defined(__FRAMAC__)
-            if(ep > 0){
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),mpsize, USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
-            }
-            else{
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),mpsize, USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
-            }
-#else
             /* Maximum packet size */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), mpsize,USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
-#endif/*__FRAMAC__*/
 
             if (type == USBOTG_HS_EP_TYPE_BULK || type == USBOTG_HS_EP_TYPE_INT) {
                 set_reg(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep), dtoggle, USBOTG_HS_DIEPCTL_SD0PID);
@@ -1104,17 +1090,8 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
                 ctx->in_eps[ep].configured = false;
             }
 
-#if defined(__FRAMAC__)
-            if(ep > 0){
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
-            }
-            else{
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
-            }
-#else
             /* Maximum packet size */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
-#endif/*__FRAMAC__*/
 
             /*  USB active endpoint */
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), USBOTG_HS_DOEPCTL_USBAEP_Msk);
@@ -1157,20 +1134,9 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->in_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
             ctx->in_eps[ep].handler = handler;
 
-#if defined(__FRAMAC__)
-            if(ep > 0){
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),mpsize, USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
-            }
-            else{
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
-                set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),mpsize, USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
-            }
-#else
             /* Maximum packet size */
             set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),mpsize, USBOTG_HS_DOEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DOEPCTL_MPSIZ_Pos(ep));
             set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),mpsize, USBOTG_HS_DIEPCTL_MPSIZ_Msk(ep),USBOTG_HS_DIEPCTL_MPSIZ_Pos(ep));
-#endif/*__FRAMAC__*/
 
             /*  USB active endpoint */
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep), USBOTG_HS_DOEPCTL_USBAEP_Msk);
@@ -1199,6 +1165,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             break;
 
         default:
+            errcode = MBED_ERROR_INVPARAM;
             break;
     }
 err:
