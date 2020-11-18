@@ -563,6 +563,7 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
  */
 /*@
   @  assigns *(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)) ;
+  @  assigns *(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)) ;
   @ assigns \result \from indirect:ep_id, indirect:dir;
 
   @ behavior badctx:
