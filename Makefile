@@ -138,6 +138,7 @@ LIBUSBCTRL_API_DIR ?= $(PROJ_FILES)/libs/usbctrl/api
 SESSION     := framac/results/frama-c-rte-eva-wp-ref.session
 EVA_SESSION := framac/results/frama-c-rte-eva.session
 TIMESTAMP   := framac/results/timestamp-calcium_wp-eva.txt
+EVAREPORT    := framac/results/eva_report_red.txt
 JOBS        := $(shell nproc)
 # Does this flag could be overriden by env (i.e. using ?=)
 TIMEOUT     := 15
@@ -166,17 +167,18 @@ FRAMAC_EVA_FLAGS:=\
 		    -eva-domains equality \
 		    -eva-split-return auto \
 		    -eva-partition-history 3 \
-		    -eva-log a:frama-c-rte-eva.log
+		    -eva-log a:frama-c-rte-eva.log\
+		    -eva-report-red-statuses $(EVAREPORT)
 
 FRAMAC_WP_FLAGS:=\
 	        -wp \
-  			-wp-model "Typed+ref+int" \
-  			-wp-literals \
-  			-wp-prover alt-ergo,cvc4,z3 \
-   			-wp-timeout $(TIMEOUT) \
-			-wp-smoke-tests \
-			-wp-no-smoke-dead-code \
-   			-wp-log a:frama-c-rte-eva-wp.log
+		-wp-model "Typed+ref+int" \
+		-wp-literals \
+		-wp-prover alt-ergo,cvc4,z3 \
+		-wp-timeout $(TIMEOUT) \
+		-wp-smoke-tests \
+		-wp-no-smoke-dead-code \
+		-wp-log a:frama-c-rte-eva-wp.log
 
 
 frama-c-parsing:
@@ -193,12 +195,13 @@ frama-c-eva:
 
 frama-c:
 	frama-c framac/entrypoint.c usbotghs*.c -c11 \
-		    $(FRAMAC_GEN_FLAGS) \
-			$(FRAMAC_EVA_FLAGS) \
-   		    -then \
-			$(FRAMAC_WP_FLAGS) \
-   			-save $(SESSION) \
-   			-time $(TIMESTAMP)
+		$(FRAMAC_GEN_FLAGS) \
+		$(FRAMAC_EVA_FLAGS) \
+		-then \
+		$(FRAMAC_WP_FLAGS) \
+		-save $(SESSION) \
+		-time $(TIMESTAMP)\
+		-then -report -report-classify
 
 frama-c-instantiate:
 	frama-c framac/entrypoint.c usbotghs*.c -c11 -machdep x86_32 \
