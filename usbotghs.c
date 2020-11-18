@@ -608,7 +608,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         /*@
           @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
           @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns errcode, cpt;
+          @ loop assigns cpt ;
           @ loop variant CPT_HARD - cpt ;
           */
 
@@ -739,7 +739,7 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
     /*@
       @ loop invariant \valid(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
       @ loop invariant 0<=cpt<= CPT_HARD ;
-      @ loop assigns cpt;
+      @ loop assigns cpt ;
       @ loop variant CPT_HARD - cpt ;
       */
 

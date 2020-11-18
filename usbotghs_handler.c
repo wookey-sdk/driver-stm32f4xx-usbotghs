@@ -417,7 +417,8 @@ static mbed_error_t oepint_handler(void)
                     }
 #endif
                     /* In FramaC context, upper handler is my_handle_outepevent */
-                    /*@ calls my_handle_outepevent, handler_ep; */
+		    /*@ assert ctx->out_eps[ep_id].handler \in {&my_handle_outepevent, &handler_ep} ;*/
+		    /*@ calls my_handle_outepevent, handler_ep; */
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
                     if (end_of_transfer == true && ep_id == 0) {
@@ -586,8 +587,8 @@ static mbed_error_t iepint_handler(void)
 #endif
 
                             /* In FramaC context, upper handler is my_handle_inepevent */
-                            /*  assert ctx->in_eps[ep_id].handler \in {usbctrl_handle_inepevent, my_handle_inepevent, handler_ep}; */
-                            /*@ calls handler_ep; */
+                            /*@ assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
+                            /*@ calls  handler_ep; */
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
@@ -993,7 +994,7 @@ void USBOTGHS_IRQHandler(uint8_t interrupt __attribute__((unused)),
              * invalid memory access in the other case. */
 
             /*@ assert usb_otg_hs_isr_handlers[i] \in
-              { default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, ususpend_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler }; */
+              { &default_handler, &mmism_handler, &otg_handler, &sof_handler, &rxflvl_handler, &reserved_handler, &ususpend_handler, &esuspend_handler, &reset_handler, &enumdone_handler, &iepint_handler, &oepint_handler }; */
             /*@ calls default_handler, mmism_handler, otg_handler, sof_handler, rxflvl_handler, reserved_handler, ususpend_handler, esuspend_handler, reset_handler, enumdone_handler, iepint_handler, oepint_handler; */
             usb_otg_hs_isr_handlers[i]();
         }
