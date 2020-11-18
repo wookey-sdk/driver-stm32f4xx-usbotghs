@@ -1317,23 +1317,6 @@ err:
 /*
  * Force EP to stop transmit (IN EP) or receive (OUT EP)
  */
-mbed_error_t usbotghs_enpoint_nak(uint8_t ep)
-{
-    mbed_error_t errcode = MBED_ERROR_NONE;
-    ep = ep;
-    return errcode;
-}
-
-/*
- * Leave the NAK (freezed) mode for given EP
- */
-mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep)
-{
-    mbed_error_t errcode = MBED_ERROR_NONE;
-    ep = ep;
-    return errcode;
-}
-
 /* disable (temporary) a given Endpoint (no more data is received or sent) */
 mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
                                        usbotghs_ep_dir_t     dir)

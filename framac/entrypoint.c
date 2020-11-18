@@ -265,7 +265,7 @@ void test_fcn_driver_eva(void)
     usb_backend_drv_send_data((uint8_t *)&resp, 512, 2);
 
 
-
+    usbotghs_txfifo_flush_all();
     /*
         TODO : send_data analyse is not enough generalised
     */

@@ -379,11 +379,17 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id);
  * INFO: stall mode for Control and data EP don't have the same meaning. See datasheet,
  * chap 35.13.7
  */
+/*@
+  @ assigns \nothing;
+  */
 mbed_error_t usbotghs_global_stall(void);
 
 /*
  * Clear the global stall mode.
  */
+/*@
+  @ assigns \nothing;
+  */
 mbed_error_t usbotghs_global_stall_clear(void);
 
 /*
@@ -766,12 +772,5 @@ uint16_t usbotghs_get_ep_mpsize(void);
   @ ensures \result == USBOTG_HS_PORT_HIGHSPEED ;
   */
 usbotghs_port_speed_t usbotghs_get_speed(void);
-
-#if defined(__FRAMAC__)
-/*Cyril : these 2 functions are called by test_fcn_driver_eva, so i need to declare their proto somewhere */
-mbed_error_t usbotghs_enpoint_nak(uint8_t ep) ;
-mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep) ;
-#endif/*__FRAMAC__*/
-
 
 #endif /*!LIBUSBOTGHS_H_ */
