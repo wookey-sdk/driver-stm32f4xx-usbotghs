@@ -170,7 +170,7 @@ FRAMAC_EVA_FLAGS:=\
 		    -eva-domains equality \
 		    -eva-split-return auto \
 		    -eva-partition-history 3 \
-		    -eva-log a:frama-c-rte-eva.log\
+		    -eva-log a:framac/results/frama-c-rte-eva-wp-ref.log\
 		    -eva-report-red-statuses $(EVAREPORT)\
             -metrics \
 			-metrics-eva-cover *.c
@@ -183,7 +183,7 @@ FRAMAC_WP_FLAGS:=\
 		-wp-timeout $(TIMEOUT) \
 		-wp-smoke-tests \
 		-wp-no-smoke-dead-code \
-		-wp-log a:frama-c-rte-eva-wp.log
+		-wp-log a:framac/results/frama-c-rte-eva-wp.log
 
 
 frama-c-parsing:
