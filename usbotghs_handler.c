@@ -417,7 +417,6 @@ static mbed_error_t oepint_handler(void)
                     }
 #endif
                     /* In FramaC context, upper handler is my_handle_outepevent */
-                    /*@ assert ctx->out_eps[ep_id].handler \in {my_handle_outepevent, handler_ep}; */
                     /*@ calls my_handle_outepevent, handler_ep; */
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
@@ -666,6 +665,8 @@ static mbed_error_t rxflvl_handler(void)
     grxstsp = read_reg_value(r_CORTEX_M_USBOTG_HS_GRXSTSP);
 
     ctx = usbotghs_get_context();
+    /* @ assert \valid(ctx); */
+
     log_printf("[USBOTG][HS] Rxflvl handler\n");
 
     /* what is our mode (Host or Dev) ? Set corresponding variables */
@@ -685,6 +686,11 @@ static mbed_error_t rxflvl_handler(void)
         goto err;
     }
     /*@ assert 0 <= epnum < USBOTGHS_MAX_OUT_EP; */
+    if (ctx->out_eps[epnum].configured != true) {
+        log_printf("[USBOTG][HS] invalid register value for epnum ! (fault injection ?)\n");
+        errcode = MBED_ERROR_UNKNOWN;
+        goto err;
+    }
 
 #if CONFIG_USR_DRV_USBOTGHS_DEBUG
 # if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
@@ -740,6 +746,8 @@ static mbed_error_t rxflvl_handler(void)
                         goto err;
                     }
                     log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT (size %d) Read EPx FIFO\n", epnum, bcnt);
+
+                    /*@ assert usbotghs_ctx.out_eps[epnum].configured == \true; */
                     if (usbotghs_read_epx_fifo(bcnt, epnum) != MBED_ERROR_NONE) {
                         /* empty fifo on error */
                         usbotghs_rxfifo_flush(epnum);
@@ -784,88 +792,29 @@ static mbed_error_t rxflvl_handler(void)
                 {
                     log_printf("[USB HS][RXFLVL] Setup pkt (%dB) received on ep %d\n", bcnt, epnum);
                     if (bcnt == 0) {
+                        /* ZLP, nothing to do. */
                         goto err;
                     }
                     /*@ assert bcnt > 0; */
                     if (epnum != USBOTG_HS_EP0) {
-
-                        /* Setup pkt not supported out of EP0 */
-                        uint8_t buf[16];
-                        const uint32_t initial_bcnt = bcnt;
-                        const uint32_t num_loops = initial_bcnt / 16;
-                        /*@ assert initial_bcnt == bcnt;*/
-                        /*@ assert num_loops >= 1 ==> (initial_bcnt >= (16*num_loops)); */
-                        /*@ assert num_loops >= 1 ==> (initial_bcnt < ((16*num_loops)+16)); */
-                        /*@
-                          @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(epnum) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
-                          @ loop invariant 0 <= i <= num_loops;
-                          @ loop invariant initial_bcnt > 0;
-                          @ loop invariant num_loops == initial_bcnt / 16;
-                          @ loop invariant \valid(buf + (0 .. 15));
-                          @ loop invariant 0 <= num_loops <= initial_bcnt;
-                          @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
-                          @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-                          @ loop assigns i, bcnt, *(buf + (0 .. 15));
-                          @ loop variant (num_loops - i);
-                          */
-                        for (uint16_t i = 0; i < num_loops; i++) {
-                            /*@ assert num_loops >= 1 ==> initial_bcnt >= 16*num_loops; */
-                            usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
-                            /*@ assert bcnt >= 16; */
-                            bcnt -= 16;
-                            /*@ assert bcnt >= 0; */
-                        }
-                        if (bcnt > 0) {
-                          /*@ assert bcnt <= 16; */
-                            usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
-                        }
-
+                        usbotghs_rxfifo_flush(epnum);
+                        usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         errcode = MBED_ERROR_UNSUPORTED_CMD;
                         goto err;
-                    }
-                    if (ctx->out_eps[epnum].state == USBOTG_HS_EP_STATE_SETUP) {
+                    } else if (ctx->out_eps[epnum].state == USBOTG_HS_EP_STATE_SETUP) {
                         /* associated oepint not yet executed, return NYET to host */
-                        if (bcnt > 0) {
-                            uint8_t buf[16];
-                            const uint32_t initial_bcnt = bcnt;
-                            const uint32_t num_loops = initial_bcnt / 16;
-
-                            /*@
-                              @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(epnum) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
-                              @ loop invariant 0 <= i <= num_loops;
-                              @ loop invariant initial_bcnt > 0;
-                              @ loop invariant num_loops == initial_bcnt / 16;
-                              @ loop invariant initial_bcnt >= 0;
-                              @ loop invariant \valid(buf + (0 .. 15));
-                              @ loop invariant 0 <= num_loops <= initial_bcnt;
-                              @ loop invariant epnum < USBOTGHS_MAX_OUT_EP;
-                              @ loop invariant \separated((uint8_t*)(buf + (0 .. 15)),&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-                              @ loop assigns i, bcnt, *(buf + (0 .. 15));
-                              @ loop variant (num_loops - i);
-                              */
-                            for (uint16_t i = 0; i < num_loops; i++) {
-                                /*@ assert num_loops >= 1 ==> initial_bcnt >= 16*num_loops; */
-                                usbotghs_read_core_fifo(&(buf[0]), 16, epnum);
-                                /*@ assert bcnt >= 16; */
-                                bcnt -= 16;
-                                /*@ assert bcnt >= 0; */
-                            }
-                            if (bcnt > 0) {
-                                usbotghs_read_core_fifo(&(buf[0]), bcnt, epnum);
-                            }
-                        }
+                        usbotghs_rxfifo_flush(epnum);
                         usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
-                    if (bcnt == 0) {
-                        /* This is a Zero-length-packet reception, nothing to do */
-                        goto err;
-                    }
                     /* INFO: here, We don't check the setup pkt size, this is under the responsability of the
                      * control plane, as the setup pkt size is USB-standard defined, not driver specific */
-                    usbotghs_read_epx_fifo(bcnt, epnum);
-                    // TODO: read_fifo(setup_packet, bcnt, epnum);
+                    if (usbotghs_read_epx_fifo(bcnt, epnum)) {
+                        /* empty fifo on error */
+                        usbotghs_rxfifo_flush(epnum);
+                        usbotghs_endpoint_stall(epnum, USBOTG_HS_EP_DIR_OUT);
+                    }
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */
                     set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_SETUP_WIP);

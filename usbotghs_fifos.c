@@ -100,26 +100,29 @@ mbed_error_t usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, 
       @ loop assigns *(dest+(0..4*size_4bytes -1));
       @ loop variant (size_4bytes - i);
       */
-	for (uint32_t i = 0; i < size_4bytes; i++) {
-	  tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
-          /*@ assert size_4bytes >=1 ==> size >=4*size_4bytes; */
-	  dest[offset + 0] = tmp & 0xff;
-          dest[offset + 1] = (tmp >> 8) & 0xff;
-          dest[offset + 2] = (tmp >> 16) & 0xff;
-          dest[offset + 3] = (tmp >> 24) & 0xff;
-          offset += 4;
-          //old, FRAMAC incompatible cast *(uint32_t *)dest = *(USBOTG_HS_DEVICE_FIFO(ep));
-          /*@ assert offset<= 4*size_4bytes; */
-	}
-	/*@ assert offset <= size;*/
-        /*@ assert offset == 4*size_4bytes; */
-	/*@ assert size == (size_4bytes * 4) + (size%4); */
-        /*@ assert offset == size - (size%4); */
+    for (uint32_t i = 0; i < size_4bytes; i++) {
+        tmp = *(USBOTG_HS_DEVICE_FIFO(ep));
+        /*@ assert size_4bytes >=1 ==> size >=4*size_4bytes; */
+        dest[offset + 0] = tmp & 0xff;
+        dest[offset + 1] = (tmp >> 8) & 0xff;
+        dest[offset + 2] = (tmp >> 16) & 0xff;
+        dest[offset + 3] = (tmp >> 24) & 0xff;
+        //old, FRAMAC incompatible cast *(uint32_t *)dest = *(USBOTG_HS_DEVICE_FIFO(ep));
+        /* this assert must be set **before** the offset increment, as, when size is a 4 bytes
+           multiple, the last increment of offset generate an overflow. Though, this
+           overflow **is not impacting** as in this last case, offset is no more used. */
+        offset += 4;
+        /*@ assert offset<= 4*size_4bytes; */
+    }
+    /*@ assert offset <= size;*/
+    /*@ assert offset == 4*size_4bytes; */
+    /*@ assert size == (size_4bytes * 4) + (size%4); */
+    /*@ assert offset == size - (size%4); */
         request_data_membarrier();
         /* read the residue */
     switch (size % 4) {
     case 0:
-      /*@ assert offset <= size ; */
+      /*@ assert offset == size ; */
       break;
     case 1:
       /*@ assert offset == size-1; */
@@ -189,7 +192,7 @@ static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, u
 
     /*@
         @ loop invariant 0 <= i <= size_4bytes;
-        @ loop invariant ep <= 3 ;
+        @ loop invariant ep <= USBOTGHS_MAX_IN_EP ;
         @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
         @ loop invariant \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
         @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), tmp, src ;
@@ -376,6 +379,60 @@ err:
     return errcode;
 }
 
+
+/*@
+  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..));
+  @ assigns \nothing;
+  */
+mbed_error_t usbotghs_is_epx_fifo_valid(uint32_t size, uint8_t ep_id, uint8_t ep_dir)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    usbotghs_context_t *ctx = usbotghs_get_context();
+    /*@ assert \valid(ctx); */
+    usbotghs_ep_t*      ep = NULL;
+
+    switch (ep_dir) {
+        case USBOTG_HS_EP_DIR_IN:
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            ep = &(ctx->in_eps[ep_id]);
+            break;
+        case USBOTG_HS_EP_DIR_OUT:
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
+                errcode = MBED_ERROR_INVPARAM;
+                goto err;
+            }
+            ep = &(ctx->out_eps[ep_id]);
+            break;
+        default:
+            errcode = MBED_ERROR_INVPARAM;
+            goto err;
+    }
+
+    /*@ assert \valid(ep); */
+
+    if (ep->configured == false) {
+        log_printf("[USBOTG][HS] EPx %d not configured\n", ep->id);
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (ep->fifo == NULL) {
+        log_printf("[USBOTG][HS] EPx %d FIFO not set\n", ep->id);
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (ep->fifo_size < size) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+
+    /*@ assert \valid(ep->fifo+(0..ep->fifo_size)); */
+err:
+    return errcode;
+}
+
 /*
  * read from Core EPx FIFO to associated RAM FIFO for given EP.
  * The EP must be a receiver EP (IN in host mode, OUT in device mode)
@@ -386,7 +443,59 @@ err:
  */
 /*@
   @ requires 0 <= ep_id < USBOTGHS_MAX_OUT_EP;
-  @ assigns usbotghs_ctx.out_eps[ep_id];
+  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..));
+  @ assigns usbotghs_ctx.out_eps[ep_id],  *(usbotghs_ctx.out_eps[ep_id].fifo+(usbotghs_ctx.out_eps[ep_id].fifo_idx..(usbotghs_ctx.out_eps[ep_id].fifo_idx + (size-1))));
+
+  @ behavior notconfigured:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \false;
+  @    ensures \result == MBED_ERROR_INVPARAM;
+
+
+  @ behavior nofifo:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \false;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo == NULL;
+  @    ensures \result == MBED_ERROR_INVPARAM;
+
+  @ behavior noread:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \true;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo != NULL;
+  @    assumes size == 0;
+  @    ensures usbotghs_ctx.out_eps[ep_id] == \old(usbotghs_ctx.out_eps[ep_id]);
+  @    ensures \result == MBED_ERROR_NONE;
+
+  @ behavior invalididx:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \true;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo != NULL;
+  @    assumes size > 0;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo_idx > usbotghs_ctx.out_eps[ep_id].fifo_size;
+  @    ensures \result == MBED_ERROR_UNKNOWN;
+
+  @ behavior sizetoobig:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \true;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo != NULL;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo_idx <= usbotghs_ctx.out_eps[ep_id].fifo_size;
+  @    assumes size > (usbotghs_ctx.out_eps[ep_id].fifo_size - usbotghs_ctx.out_eps[ep_id].fifo_idx);
+  @    ensures \result == MBED_ERROR_INVPARAM;
+
+  @ behavior fifolocked:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \true;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo != NULL;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo_idx <= usbotghs_ctx.out_eps[ep_id].fifo_size;
+  @    assumes 0 < size <= (usbotghs_ctx.out_eps[ep_id].fifo_size - usbotghs_ctx.out_eps[ep_id].fifo_idx);
+  @    ensures \result == MBED_ERROR_INVSTATE;
+
+  @ behavior ok:
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \true;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo != NULL;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo_lck != \true;
+  @    assumes usbotghs_ctx.out_eps[ep_id].fifo_idx <= usbotghs_ctx.out_eps[ep_id].fifo_size;
+  @    assumes 0 < size <= (usbotghs_ctx.out_eps[ep_id].fifo_size - usbotghs_ctx.out_eps[ep_id].fifo_idx);
+  @    ensures \result == MBED_ERROR_NONE;
+
+
+  @ complete behaviors;
+  @ disjoint behaviors;
+
   */
 mbed_error_t usbotghs_read_epx_fifo(uint32_t size, uint8_t ep_id)
 {
@@ -407,29 +516,48 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
+
+    /*@ assert \valid(ep); */
+    /* @assert \valid(ep->fifo); */
+    /* @assert \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),
+           &num_ctx,ctx_list+(..),&usbotghs_ctx,
+           usbotghs_ctx.out_eps[ep_id].fifo+(0..usbotghs_ctx.out_eps[ep_id].fifo_size)); */
+
     /* TODO: checking that EP is in correct direction before continuing */
     if (size == 0) {
         log_printf("[USBOTG][HS] nothing to read on EPx %d\n", ep->id);
+        /*@ assert \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Here) == \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Pre);*/
+        goto err;
+    }
+    if (ep->fifo_idx > ep->fifo_size) {
+        log_printf("[USBOTG][HS] FIFO idx to big! This should not happen on EPx %d\n", ep->id);
+        /*@ assert \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Here) == \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Pre);*/
+        errcode = MBED_ERROR_UNKNOWN;
         goto err;
     }
     if (size > (ep->fifo_size - ep->fifo_idx)) {
         log_printf("[USBOTG][HS] invalid or too big size in ep %d: %d (fifo: 0x%x, fifo size: %d, idx: %d)\n", ep->id, size, ep->fifo, ep->fifo_size, ep->fifo_idx);
         /* Why reading 0 bytes from Core FIFO ? */
         errcode = MBED_ERROR_INVPARAM;
+        /*@ assert \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Here) == \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Pre);*/
         goto err;
     }
     /* Let's now do the read transaction itself... */
     if (ep->fifo_lck != false) {
         log_printf("[USBOTG][HS] invalid state! fifo already locked\n");
         errcode = MBED_ERROR_INVSTATE;
+        /*@ assert \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Here) == \at(usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_IN_EP-1],Pre);*/
         goto err;
     }
     set_bool_with_membarrier(&(ep->fifo_lck), true);
+    /* @ assert \valid(ep->fifo + (0 .. (ep->fifo_idx+size-1))); */
     usbotghs_read_core_fifo(&(ep->fifo[ep->fifo_idx]), size, ep->id);
     ep->fifo_idx += size;
     request_data_membarrier();
     set_bool_with_membarrier(&(ep->fifo_lck), false);
+    /*@ assert errcode == MBED_ERROR_NONE; */
 err:
+    /* INVSTATE patch */
     return errcode;
 }
 
@@ -449,7 +577,7 @@ err:
 
 /*@
     @ requires ep_id < USBOTGHS_MAX_IN_EP;
-    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size));
+    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (size-1))));
 
     @ behavior badsize:
@@ -517,7 +645,11 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
-    /* @assert \valid(ep->fifo); */
+
+    /*@ assert \valid(ep->fifo); */
+
+    /*@ assert \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size)); */
+
     /* Let's now do the read transaction itself... */
     if (ep->fifo_lck == true) {
         log_printf("[USBOTG][HS] invalid state! fifo already locked\n");
@@ -733,6 +865,7 @@ err:
 }
 
 /*@
+    @ requires ep_id < USBOTGHS_MAX_IN_EP;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
     @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_BUSY ;
 */
@@ -807,6 +940,7 @@ mbed_error_t usbotghs_txfifo_flush_all(void)
 }
 
 /*@
+    @ requires ep_id < USBOTGHS_MAX_OUT_EP;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
     @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_BUSY ;
 */
@@ -818,6 +952,7 @@ mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id)
  	 * This is the FIFO number that must be flushed using the RxFIFO Flush bit.
  	 * This field must not be changed until the core clears the RxFIFO Flush bit.
  	 */
+
     /*@
         @ loop invariant 0 <= cpt <= CPT_HARD;
         @ loop assigns cpt;
@@ -840,6 +975,7 @@ mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id)
 	/* FIXME Read: the NAK effective interrupt ensures the core is not reading from the FIFO */
 
 	/* Write: the AHBIDL bit in OTG_HS_GRSTCTL ensures that the core is not writing anything to the FIFO */
+    /* requesting RX fifo flush (RX FIFO is shared in USB-OTG-HS device) */
 	set_reg(r_CORTEX_M_USBOTG_HS_GRSTCTL, 1, USBOTG_HS_GRSTCTL_RXFFLSH);
     /*@
         @ loop invariant 0 <= cpt <= CPT_HARD;

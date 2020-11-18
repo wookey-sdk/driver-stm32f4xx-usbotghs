@@ -43,10 +43,10 @@
 */
 
 
-#define USBOTGHS_MAX_IN_EP   8
-#define USBOTGHS_MAX_OUT_EP  3
+#define USBOTGHS_MAX_IN_EP   5
+#define USBOTGHS_MAX_OUT_EP  5
 
-#define MAX_EP_HW 4
+#define MAX_EP_HW 5
 
 /* FramaC specific header, needed in order to expose ACSL anotations in the API file,
  * allowing the usage of composition for upper layers, using use-specs for this very
@@ -101,6 +101,9 @@ usbotghs_context_t *usbotghs_get_context(void);
 
 
 #include "libusbctrl.h"
+
+/* exported for direct test/full traversal */
+mbed_error_t usbotghs_is_epx_fifo_valid(uint32_t size, uint8_t ep_id, uint8_t ep_dir);
 
 #endif/*__FRAMAC__*/
 

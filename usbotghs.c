@@ -105,8 +105,8 @@ mbed_error_t usbotghs_declare(void)
     memcpy((void*)usbotghs_ctx.dev.name, devname, strlen(devname));
 #endif/*!__FRAMAC__*/
 
-    usbotghs_ctx.dev.address = USB_OTG_HS_BASE;
-    usbotghs_ctx.dev.size = 0x4000;
+    usbotghs_ctx.dev.address = usb_otg_hs_dev_infos.address;
+    usbotghs_ctx.dev.size = usb_otg_hs_dev_infos.size;
     usbotghs_ctx.dev.irq_num = 1;
     /* device is mapped voluntary and will be activated after the full
      * authentication sequence
@@ -772,11 +772,6 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
     uint32_t count = 0;
-    /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
 
     /*
      * FIXME: For IN endpoint, implicit fallthrough to IN+OUT NAK
@@ -858,12 +853,6 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
-    //uint32_t count = 0;
-    /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
 
     /*
      * FIXME: For IN endpoint, implicit fallthrough to IN+OUT ACK
@@ -935,10 +924,6 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
     usbotghs_context_t *ctx = usbotghs_get_context();
     uint32_t count = 0;
     /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             if (ep_id >= USBOTGHS_MAX_IN_EP) {
@@ -1220,13 +1205,10 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
-    /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
+    /*@ assert ctx == &usbotghs_ctx; */
 
-    if((ep >= USBOTGHS_MAX_OUT_EP) || (ep >= USBOTGHS_MAX_IN_EP))
+    /* sanitize */
+    if(ep >= USBOTGHS_MAX_IN_EP)
     {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
@@ -1240,16 +1222,20 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
         clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
                 USBOTG_HS_DIEPCTL_EPENA_Msk);
     }
-    if (ctx->out_eps[ep].configured == true) {
-        /* FIX: flushing fifo for each EP */
-        usbotghs_rxfifo_flush(ep);
 
-        clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
-                USBOTG_HS_DOEPCTL_EPENA_Msk);
+    if(ep < USBOTGHS_MAX_OUT_EP) {
+        if (ctx->out_eps[ep].configured == true) {
+            /* FIX: flushing fifo for each EP */
+            usbotghs_rxfifo_flush(ep);
+
+            clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
+                    USBOTG_HS_DOEPCTL_EPENA_Msk);
+        }
     }
 
     set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
 
+    /*@ assert errcode == MBED_ERROR_NONE; */
 err:
     return errcode;
 }
@@ -1298,14 +1284,21 @@ err:
     return errcode;
 }
 
-mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep,
-        usbotghs_ep_dir_t     dir)
+mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep_id,
+                                          usbotghs_ep_dir_t     dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-    usbotghs_context_t *ctx = usbotghs_get_context();
     /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
+    if (dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_OUT) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (dir == USBOTG_HS_EP_DIR_IN && ep_id >= USBOTGHS_MAX_IN_EP) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (dir == USBOTG_HS_EP_DIR_OUT && ep_id >= USBOTGHS_MAX_OUT_EP) {
+        errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
 
@@ -1313,19 +1306,22 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep,
 
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
-            clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
+            clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
                     USBOTG_HS_DIEPCTL_EPENA_Msk);
             break;
         case USBOTG_HS_EP_DIR_OUT:
-            clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep),
+            clear_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id),
                     USBOTG_HS_DOEPCTL_EPENA_Msk);
             break;
         default:
+            /* unreachable, requested by compiler quality check */
+            /*@ assert \false; */
             break;
 
     }
     set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
 
+    /*@ assert errcode == MBED_ERROR_NONE; */
 err:
     return errcode;
 }
@@ -1352,31 +1348,29 @@ mbed_error_t usbotghs_enpoint_nak_clear(uint8_t ep)
 
 /* disable (temporary) a given Endpoint (no more data is received or sent) */
 mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
-        usbotghs_ep_dir_t     dir)
+                                       usbotghs_ep_dir_t     dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_ep_t *ep = NULL;
 
     log_printf("[USBOTGHS] disable EP %d: dir %d\n", ep_id, dir);
     usbotghs_context_t *ctx = usbotghs_get_context();
-    /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
+    /*@ assert \valid(ctx); */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
-            if (ep_id > USBOTGHS_MAX_IN_EP) {
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
                 errcode = MBED_ERROR_INVPARAM;
                 goto err;
             }
+            /*@ assert (ep_id < USBOTGHS_MAX_IN_EP && dir == USBOTG_HS_EP_DIR_IN); */
             ep = &(ctx->in_eps[ep_id]);
             break;
         case USBOTG_HS_EP_DIR_OUT:
-            if (ep_id > USBOTGHS_MAX_OUT_EP) {
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
                 errcode = MBED_ERROR_INVPARAM;
                 goto err;
             }
+            /*@ assert (ep_id < USBOTGHS_MAX_OUT_EP && dir == USBOTG_HS_EP_DIR_OUT); */
             ep = &(ctx->in_eps[ep_id]);
             break;
         default:
@@ -1388,6 +1382,7 @@ mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
             USBOTG_HS_DIEPCTL_EPDIS_Msk,
             USBOTG_HS_DIEPCTL_EPDIS_Pos);
 
+    /*@ assert errcode == MBED_ERROR_NONE; */
 err:
     return errcode;
 
@@ -1403,23 +1398,21 @@ mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
     log_printf("[USBOTGHS] enable EP %d: dir %d\n", ep_id, dir);
     usbotghs_context_t *ctx = usbotghs_get_context();
     /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
-            if (ep_id > USBOTGHS_MAX_IN_EP) {
+            if (ep_id >= USBOTGHS_MAX_IN_EP) {
                 errcode = MBED_ERROR_INVPARAM;
                 goto err;
             }
+            /*@ assert (ep_id < USBOTGHS_MAX_IN_EP && dir == USBOTG_HS_EP_DIR_IN); */
             ep = &(ctx->in_eps[ep_id]);
             break;
         case USBOTG_HS_EP_DIR_OUT:
-            if (ep_id > USBOTGHS_MAX_OUT_EP) {
+            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
                 errcode = MBED_ERROR_INVPARAM;
                 goto err;
             }
+            /*@ assert (ep_id < USBOTGHS_MAX_OUT_EP && dir == USBOTG_HS_EP_DIR_OUT); */
             ep = &(ctx->in_eps[ep_id]);
             break;
         default:
@@ -1430,6 +1423,7 @@ mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
     set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), 0x0,
             USBOTG_HS_DIEPCTL_EPDIS_Msk,
             USBOTG_HS_DIEPCTL_EPDIS_Pos);
+    /*@ assert errcode == MBED_ERROR_NONE; */
 err:
     return errcode;
 

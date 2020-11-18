@@ -328,10 +328,14 @@
 #define USBOTG_HS_GRXSTSP_GET_STATUS(grxstsp) ((grxstsp & 0x1e0000) >> 17)
 #define USBOTG_HS_GRXSTSP_GET_DPID(grxstsp) ((grxstsp & 0x18000) >> 15)
 #define USBOTG_HS_GRXSTSP_GET_BCNT(grxstsp) ((grxstsp & 0x7ff0) >> 4)
-#define USBOTG_HS_GRXSTSP_GET_EPNUM(grxstsp) (grxstsp & 0xf)
-#define USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp) (grxstsp & 0xf)
+#ifdef __FRAMAC__
 #define USBOTG_HS_GRXSTSP_EPNUM_Pos          0
 #define USBOTG_HS_GRXSTSP_EPNUM_Msk          0xf
+#define USBOTG_HS_GRXSTSP_BCNT_Pos          4
+#define USBOTG_HS_GRXSTSP_BCNT_Msk          0x7ff
+#endif
+#define USBOTG_HS_GRXSTSP_GET_EPNUM(grxstsp) (grxstsp & 0xf)
+#define USBOTG_HS_GRXSTSP_GET_CHNUM(grxstsp) (grxstsp & 0xf)
 
 
 
