@@ -156,7 +156,7 @@ void init_driver(void)
     errcode = usbotghs_configure(mode, & usbctrl_handle_inepevent,& usbctrl_handle_outepevent);
     /*  assert errcode != MBED_ERROR_NONE; */
 
-    /* Here, we set, even for EP0, generic, empty callbacks (same for all EPs, are the EP0 control plane proof is handled in
+    /* Here, we set, even for EP0, generic, empty callbacks (same for all EPs, as the EP0 control plane proof is handled in
      * USBxDCI, not here. */
     errcode = usbotghs_configure(USBOTGHS_MODE_DEVICE, &handler_ep, &handler_ep);
 
@@ -181,6 +181,8 @@ void test_fcn_driver_eva(void)
     usbotghs_ep_type_t type = Frama_C_interval_8(0,3);
     usbotghs_ep_state_t state = Frama_C_interval_8(0,9) ;
 
+    usbotghs_get_ep_mpsize();
+    usbotghs_get_speed();
     usbotghs_global_stall() ;
     usbotghs_endpoint_set_nak(ep_id, dir) ;
     usbotghs_global_stall_clear();
@@ -255,7 +257,6 @@ void test_fcn_driver_eva(void)
     /* EP 1 */
     usbotghs_configure_endpoint(1,type,USB_BACKEND_DRV_EP_DIR_OUT, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usbotghs_activate_endpoint(1, USB_BACKEND_DRV_EP_DIR_OUT);
-    usbotghs_read_epx_fifo(0, 1);
     /* reading 0 bytes from EP 1 */
     /* EP 2 */
     usbotghs_configure_endpoint(2,type,USB_BACKEND_DRV_EP_DIR_IN, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
@@ -365,6 +366,14 @@ void test_fcn_isr_events(void)
     /* sending fifo_size + 1/2 fifo_size */
     usb_backend_drv_send_data((uint8_t *)&resp, 768, 2);
 
+
+    /* HID typical endpoint: both direction, interrupt mode */
+    usbotghs_configure_endpoint(3,USBOTG_HS_EP_TYPE_INT, USBOTG_HS_EP_DIR_BOTH, 64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    usbotghs_activate_endpoint(3, USB_BACKEND_DRV_EP_DIR_IN);
+    usbotghs_activate_endpoint(3, USB_BACKEND_DRV_EP_DIR_OUT);
+    usbotghs_set_recv_fifo((uint8_t *)&resp[0], 128, 3);
+    usb_backend_drv_send_data((uint8_t *)&resp, 128, 3);
+    usb_backend_drv_send_zlp(3);
 
     return;
 }

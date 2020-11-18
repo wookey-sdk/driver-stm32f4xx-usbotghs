@@ -463,7 +463,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
         goto err_init;
     }
-
+    /* giving these three assertions, next call to usbotghs_write_epx_fifo() should has its
+     * preconditions granted. */
+    /*@ assert ep->fifo_size == size; */
+    /*@ assert ep->fifo_idx == 0; */
+    /*@ assert ep->mpsize <= fifo_size; */
 
     /*
      * Here, we have to split the src content, taking into account the
@@ -680,6 +684,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         log_printf("[USBOTGHS] write %d len data on ep %d core fifo\n", residual_size, ep->id);
+        /*@ assert residual_size <= fifo_size; */
         usbotghs_write_epx_fifo(residual_size, ep->id);
         /* wait for XMIT data to be transfered (wait for iepint (or oepint in
          * host mode) to set the EP in correct state */
@@ -1032,6 +1037,11 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
     mbed_error_t errcode = MBED_ERROR_NONE;
     log_printf("[USBOTGHS] configure EP %d: dir %d, mpsize %d, type %x\n", ep, dir, mpsize, type);
     usbotghs_context_t *ctx = usbotghs_get_context();
+    if (mpsize < 8 || mpsize > USBOTG_HS_TX_CORE_FIFO_SZ) {
+        log_printf("[USBOTGHS] configure EP %d: mpsize to big for HW\n", ep);
+        errcode = MBED_ERROR_NOSTORAGE;
+        goto err;
+    }
     /* sanitize */
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:

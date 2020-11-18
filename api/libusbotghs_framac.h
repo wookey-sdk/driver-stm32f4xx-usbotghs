@@ -49,6 +49,14 @@
 /* is the following useless ?*/
 #define MAX_EP_HW 6
 
+
+/*
+ * Size of the USB OTG HS core internal FIFO (global config, not per EP)
+ */
+#define USBOTG_HS_RX_CORE_FIFO_SZ 512 /* 128 bytes, unit is 32bits DWORD here */
+#define USBOTG_HS_TX_CORE_FIFO_SZ 512 /* 128 bytes, unit is 32bits DWORD here */
+
+
 /* FramaC specific header, needed in order to expose ACSL anotations in the API file,
  * allowing the usage of composition for upper layers, using use-specs for this very
  * module */

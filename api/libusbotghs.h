@@ -491,36 +491,47 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)], usbotghs_ctx, usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)] ;
   @ assigns \result \from indirect:ep, indirect:dir;
 
+  @ behavior invmpsize:
+  @   assumes (mpsize < 8 || mpsize > USBOTG_HS_TX_CORE_FIFO_SZ); // 8 bytes is minimum for USB1.0, and mpsize must stay in the FIFO
+  @   ensures \result == MBED_ERROR_NOSTORAGE;
+
   @ behavior invalid_in_ep:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes ep >= USBOTGHS_MAX_IN_EP;
   @   ensures \result == MBED_ERROR_NOSTORAGE;
 
   @ behavior invalid_out_ep:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
   @   assumes ep >= USBOTGHS_MAX_OUT_EP;
   @   ensures \result == MBED_ERROR_NOSTORAGE;
 
   @ behavior invalid_both_ep:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir == USBOTG_HS_EP_DIR_BOTH ;
   @   assumes (ep >= USBOTGHS_MAX_OUT_EP || ep >= USBOTGHS_MAX_IN_EP);
   @   ensures \result == MBED_ERROR_NOSTORAGE;
 
   @ behavior default:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_BOTH ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
 
   @ behavior ok_in:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes ep < USBOTGHS_MAX_IN_EP;
   @   ensures \result == MBED_ERROR_NONE;
 
   @ behavior ok_out:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
   @   assumes ep < USBOTGHS_MAX_OUT_EP;
   @   ensures \result == MBED_ERROR_NONE;
 
   @ behavior ok_both:
+  @   assumes (mpsize >= 8 && mpsize <= USBOTG_HS_TX_CORE_FIFO_SZ);
   @   assumes dir == USBOTG_HS_EP_DIR_BOTH ;
   @   assumes (ep < USBOTGHS_MAX_OUT_EP && ep < USBOTGHS_MAX_OUT_EP);
   @   ensures \result == MBED_ERROR_NONE;
