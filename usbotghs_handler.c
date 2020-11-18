@@ -346,7 +346,7 @@ err:
  * OEPINNT is executed when the TxFIFO has been flushed by the core and content sent
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+    @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
 static mbed_error_t oepint_handler(void)
@@ -364,7 +364,7 @@ static mbed_error_t oepint_handler(void)
         log_printf("[USBOTG][HS] handling received data\n");
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_OUT_EP;
-          @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+          @ loop assigns daint, ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
           @ loop variant USBOTGHS_MAX_OUT_EP - ep_id;
           */
         for (ep_id = 0; ep_id < USBOTGHS_MAX_OUT_EP; ++ep_id) {
@@ -417,7 +417,7 @@ static mbed_error_t oepint_handler(void)
                     }
 #endif
                     /* In FramaC context, upper handler is my_handle_outepevent */
-		    /*@ assert ctx->out_eps[ep_id].handler \in {&my_handle_outepevent, &handler_ep} ;*/
+		    /*  assert ctx->out_eps[ep_id].handler \in {&my_handle_outepevent, &handler_ep} ;*/
 		    /*@ calls my_handle_outepevent, handler_ep; */
                     errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
@@ -587,7 +587,7 @@ static mbed_error_t iepint_handler(void)
 #endif
 
                             /* In FramaC context, upper handler is my_handle_inepevent */
-                            /*@ assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
+                            /*  assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
                             /*@ calls  handler_ep; */
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
