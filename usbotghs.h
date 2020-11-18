@@ -46,8 +46,8 @@
 
 #ifndef __FRAMAC__
 
-#define USBOTGHS_MAX_IN_EP   5
-#define USBOTGHS_MAX_OUT_EP  5
+#define USBOTGHS_MAX_IN_EP   6 /* EP0 + 5 IN EPs */
+#define USBOTGHS_MAX_OUT_EP  6 /* EP0 + 5 OUT EPs */
 
 #define MAX_EP_HW 4
 

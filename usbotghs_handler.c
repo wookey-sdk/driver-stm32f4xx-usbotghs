@@ -586,8 +586,8 @@ static mbed_error_t iepint_handler(void)
 #endif
 
                             /* In FramaC context, upper handler is my_handle_inepevent */
-                            /*@ assert ctx->in_eps[ep_id].handler \in {usbctrl_handle_inepevent, my_handle_inepevent, handler_ep}; */
-                            /*@ calls usbctrl_handle_inepevent, my_handle_inepevent, handler_ep; */
+                            /*  assert ctx->in_eps[ep_id].handler \in {usbctrl_handle_inepevent, my_handle_inepevent, handler_ep}; */
+                            /*@ calls handler_ep; */
                             errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;

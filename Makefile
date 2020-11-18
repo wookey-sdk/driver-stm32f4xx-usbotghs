@@ -169,7 +169,9 @@ FRAMAC_EVA_FLAGS:=\
 			-eva-domains equality \
 			-eva-split-return auto \
 			-eva-partition-history 3 \
-			-eva-log a:frama-c-rte-eva.log
+			-eva-log a:frama-c-rte-eva.log \
+            -metrics \
+			-metrics-eva-cover *.c
 
 FRAMAC_WP_FLAGS:=\
 	        -wp \

@@ -44,7 +44,7 @@
 #define CORE_FIFO_LENGTH 4096
 
 /*@
-  @ requires ep <= USBOTGHS_MAX_OUT_EP;
+  @ requires ep < USBOTGHS_MAX_OUT_EP;
   @ requires size > 0;
   @ requires \valid(dest + (0 .. size-1));
   @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
@@ -54,12 +54,12 @@
   @ assigns *(dest + (0 .. size-1));
 
   @ behavior badep:
-  @    assumes ep > USBOTGHS_MAX_OUT_EP;
+  @    assumes ep >= USBOTGHS_MAX_OUT_EP;
   @    ensures *(dest + (0 .. size-1)) == \old(*(dest + (0 .. size-1)));
   @    ensures \result == MBED_ERROR_INVPARAM;
 
   @ behavior ok:
-  @    assumes ep <= USBOTGHS_MAX_OUT_EP;
+  @    assumes ep < USBOTGHS_MAX_OUT_EP;
   @    ensures \result == MBED_ERROR_NONE;
 
   @ disjoint behaviors;
@@ -77,7 +77,7 @@ mbed_error_t usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, 
 
 #else
     /* sanitize, as read_core_fifo can be called from handler, with forged content */
-    if (ep > USBOTGHS_MAX_OUT_EP) {
+    if (ep >= USBOTGHS_MAX_OUT_EP) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
@@ -153,15 +153,15 @@ err:
 }
 
 /*@
-    @ requires ep <= USBOTGHS_MAX_IN_EP ;
+    @ requires ep < USBOTGHS_MAX_IN_EP ;
     @ requires \valid_read(src + (0 .. size-1));
     @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
     @ requires \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
 */
 
-/*  requires ep <= USBOTGHS_MAX_IN_EP needed for memory space :
-        if ep > USBOTGHS_MAX_IN_EP, USBOTG_HS_DEVICE_FIFO(ep) >= USB_BACKEND_MEMORY_END
+/*  requires ep < USBOTGHS_MAX_IN_EP needed for memory space :
+        if ep >= USBOTGHS_MAX_IN_EP, USBOTG_HS_DEVICE_FIFO(ep) target reserved memory
         this limit is hardware dependant (even if USBOTGHS_MAX_IN_EP > USBOTGHS_MAX_OUT_EP, it is not possible
         to handle more than USBOTGHS_MAX_IN_EP (+ EP0))
  */
@@ -192,7 +192,7 @@ static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, u
 
     /*@
         @ loop invariant 0 <= i <= size_4bytes;
-        @ loop invariant ep <= USBOTGHS_MAX_IN_EP ;
+        @ loop invariant ep < USBOTGHS_MAX_IN_EP ;
         @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
         @ loop invariant \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
         @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), tmp, src ;

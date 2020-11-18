@@ -301,6 +301,14 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* First, reset the PHY device connected to the core through ULPI interface */
     log_printf("[USB HS] Mapping device\n");
+    /*sanitize */
+    if (mode != USBOTGHS_MODE_DEVICE && mode != USBOTGHS_MODE_HOST) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    /* INFO: the driver does not requires ieph & oeph to be valid (i.e. != NULL), as the upper handler call is
+     * for EP0 is under the responsability of the upper stack. */
+
     if (sys_cfg(CFG_DEV_MAP, usbotghs_ctx.dev_desc)) {
         log_printf("[USB HS] Unable to map USB device !!!\n");
         errcode = MBED_ERROR_NOMEM;
@@ -529,16 +537,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         log_printf("[USBOTG][HS] fragment: initiate the first fragment to send (MPSize) on EP0\n");
         /* wait for enough space in TxFIFO */
 
-        /*@
-          @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
-          @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DSTS);
-          @ loop invariant ep->state == USBOTG_HS_EP_STATE_DATA_IN_WIP;
-          @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns cpt;
-          @ loop variant CPT_HARD - cpt ;
-          */
-
 #ifndef __FRAMAC__
+        /* we can't rely on contrôled timeout for xFIFU flush, as the flush time depend on multiple HW constraints which are hard to dimension.
+         * In nominal case, we wait for the TxFIFO to be flushed, except in case of busy error. In FramaC case, we must provide a loop terminaison. */
         while (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (ep->mpsize / 4)) {
             if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
                 log_printf("[USBOTG][HS] Suspended!\n");
@@ -547,7 +548,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
             }
         }
 #else
-
+        /*@
+          @ loop invariant 0<=cpt<= CPT_HARD;
+          @ loop assigns cpt;
+          @ loop variant CPT_HARD - cpt ;
+          */
         for (uint8_t cpt=0; cpt<CPT_HARD; cpt++)
         {
             if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (ep->mpsize / 4)) {
@@ -580,12 +585,14 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /*
      * First, we push FIFO size multiple into the FIFO
      */
+#ifdef __FRAMAC__
+    uint8_t cpt = 0;
+#endif
 
+    /* this loop doesn't have loop invariant for loop counters as there is no sequencial decrement upto 0 with a step of 1 */
     /*@
-      @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
-      @ loop invariant \separated(&usbotghs_ctx,r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id),r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_DEVICE_FIFO(usbotghs_ctx.in_eps[ep_id].id) )  ;
-      @ loop assigns  residual_size, *ep, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
-      @ loop variant (residual_size - fifo_size);
+      @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
+      @ loop assigns errcode, cpt, residual_size, *ep, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), *(ep->fifo+(0..ep->fifo_size-1));
       */
     while (residual_size >= fifo_size) {
 #ifndef __FRAMAC__
@@ -597,14 +604,16 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
             }
         }
 #else
+        /*@ ghost pre_in_loop: ; */
         /*@
-          @ loop invariant \valid_read(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id));
+          @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
           @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns cpt;
+          @ loop assigns errcode, cpt;
           @ loop variant CPT_HARD - cpt ;
           */
 
-        for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
+        for(cpt=0; cpt<CPT_HARD; cpt++)
+        {
             if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (fifo_size / 4)) {
                 if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
                     log_printf("[USBOTG][HS] Suspended!\n");
@@ -613,18 +622,19 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
                 }
             }
         }
+        /*@ assert \at(ep->fifo+(0..ep->fifo_size-1),pre_in_loop) == \at(ep->fifo+(0..ep->fifo_size-1),Here); */
 #endif
 
         if (residual_size == fifo_size) {
             /* last block, no more WIP */
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
             ep->state = USBOTG_HS_EP_STATE_DATA_IN;
-
 #else
             ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
 #endif
         }
 
+        /*@ assert \separated(&usbotghs_ctx,r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id),r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_DEVICE_FIFO(usbotghs_ctx.in_eps[ep_id].id), &num_ctx, &ctx_list+(..))  ; */
         /* write data from SRC to FIFO */
         usbotghs_write_epx_fifo(fifo_size, ep->id);
 
@@ -644,12 +654,13 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #else
 
             /*@
+              @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
               @ loop invariant 0<=cpt<= CPT_HARD ;
               @ loop assigns cpt ;
               @ loop variant CPT_HARD - cpt;
               */
 
-        for(uint8_t cpt=0; cpt<CPT_HARD; cpt++){
+        for(cpt=0; cpt<CPT_HARD; cpt++){
             if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV)  < ((residual_size / 4) + (residual_size & 3 ? 1 : 0))) {
 #endif
                if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){

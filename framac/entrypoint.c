@@ -145,15 +145,23 @@ uint8_t resp[4096];
 
 void init_driver(void)
 {
+    mbed_error_t errcode;
     uint8_t ep_id = Frama_C_interval_8(0,255);
     usbotghs_ep_type_t type = Frama_C_interval_8(0,3);
-    usbotghs_dev_mode_t mode = Frama_C_interval_8(0,1);
+    usbotghs_dev_mode_t mode = Frama_C_interval_8(2,255);
     usbotghs_ep_dir_t dir = Frama_C_interval_8(0,1);
 
-    usbotghs_declare();
-    usbotghs_configure(mode, & usbctrl_handle_inepevent,& usbctrl_handle_outepevent);
+    errcode = usbotghs_declare();
+    /*  assert errcode == MBED_ERROR_NONE; */
+    errcode = usbotghs_configure(mode, & usbctrl_handle_inepevent,& usbctrl_handle_outepevent);
+    /*  assert errcode != MBED_ERROR_NONE; */
 
-    usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    /* Here, we set, even for EP0, generic, empty callbacks (same for all EPs, are the EP0 control plane proof is handled in
+     * USBxDCI, not here. */
+    errcode = usbotghs_configure(USBOTGHS_MODE_DEVICE, &handler_ep, &handler_ep);
+
+    usbotghs_set_recv_fifo(&resp[0], 512, EP0);
+    usbotghs_set_address(0);
 }
 
 void test_fcn_driver_eva(void)
@@ -349,6 +357,15 @@ void test_fcn_isr_events(void)
     intmsk = (1 << 19) | (1 << 4);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
 
+
+    /* transmission check (iepint) */
+    usbotghs_configure_endpoint(2,USBOTG_HS_EP_TYPE_BULK, USBOTG_HS_EP_DIR_IN, 16,USB_BACKEND_EP_ODDFRAME,&handler_ep);
+    usbotghs_activate_endpoint(2, USB_BACKEND_DRV_EP_DIR_IN);
+
+    usb_backend_drv_send_data((uint8_t *)&resp, 512, EP0);
+
+    /* sending fifo_size + 1/2 fifo_size */
+    usb_backend_drv_send_data((uint8_t *)&resp, 768, 2);
 
 
     return;

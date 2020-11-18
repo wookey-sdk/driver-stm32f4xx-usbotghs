@@ -43,10 +43,11 @@
 */
 
 
-#define USBOTGHS_MAX_IN_EP   5
-#define USBOTGHS_MAX_OUT_EP  5
+#define USBOTGHS_MAX_IN_EP   6 /* EP0 + 5 IN EPs */
+#define USBOTGHS_MAX_OUT_EP  6 /* EP0 + 5 OUT EPs */
 
-#define MAX_EP_HW 5
+/* is the following useless ?*/
+#define MAX_EP_HW 6
 
 /* FramaC specific header, needed in order to expose ACSL anotations in the API file,
  * allowing the usage of composition for upper layers, using use-specs for this very

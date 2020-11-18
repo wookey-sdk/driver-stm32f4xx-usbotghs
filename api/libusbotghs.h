@@ -201,7 +201,6 @@ mbed_error_t usbotghs_declare(void);
  * have its USB control pipe ready to receive the first requests from the host.
  */
 /*@
-  @ requires is_valid_dev_mode(mode) ;
   @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns usbotghs_ctx \from indirect:ieph, indirect:oeph;
   @ assigns usbotghs_ctx,  *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
