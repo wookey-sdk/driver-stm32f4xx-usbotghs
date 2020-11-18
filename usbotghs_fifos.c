@@ -76,11 +76,6 @@ mbed_error_t usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, 
      */
 
 #else
-    /* sanitize, as read_core_fifo can be called from handler, with forged content */
-    if (ep >= USBOTGHS_MAX_OUT_EP) {
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
     /*
      * With DMA mode deactivated, the copy is done manually
      */
@@ -147,13 +142,13 @@ mbed_error_t usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, 
       break;
     }
     request_data_membarrier();
-err:
 #endif
     return errcode;
 }
 
 /*@
     @ requires ep < USBOTGHS_MAX_IN_EP ;
+    @ requires size > 0;
     @ requires \valid_read(src + (0 .. size-1));
     @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
     @ requires \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
@@ -176,9 +171,6 @@ static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, u
 #else
 	uint32_t size_4bytes = size / 4;
     uint32_t tmp = 0;
-    if (!src || size == 0) {
-        return;
-    }
     log_printf("[USBOTG][HS] writing %d bytes to EP %d core TxFIFO\n", size, ep);
     // IP should has its own interrupts disable during ISR execution
     uint32_t oldmask = read_reg_value(r_CORTEX_M_USBOTG_HS_GINTMSK);
@@ -514,7 +506,8 @@ err:
 /*@
     @ requires ep_id < USBOTGHS_MAX_IN_EP;
     @ requires 0 < size <= USBOTG_HS_TX_CORE_FIFO_SZ;
-    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..));
+    @ requires \valid(usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
+    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..),usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (size-1))));
 
     @ behavior badfifo:
@@ -560,26 +553,25 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
     ep = &(ctx->in_eps[ep_id]);
 
     /*@ assert \valid(ep); */
-    if (ep->fifo == NULL) {
-        log_printf("[USBOTG][HS] EP fifo not set\n");
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
-
     /*@ assert \valid(ep->fifo+(0..ep->fifo_size-1)); */
 
     /*@ assert \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1)); */
 
     /* Let's now do the read transaction itself... */
     if (ep->fifo_lck == true) {
+        /* Tgus is not exactly dead code, but this check is a protection against reentrancy between the end of the
+         * set_xmit_fifo() done by the caller (send_data()) and the current statement.
+         * Here, we do not emulate this reentrancy behavior as framaC is not well-made for this */
+        /*@ assert \false; */
         log_printf("[USBOTG][HS] invalid state! fifo already locked\n");
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
     if ((size > ep->fifo_size) || (ep->fifo_idx > (ep->fifo_size - size))) {
         /* this should be unreachable code, as fifo_size, fifo_idx and size are correlated and controled by the caller */
-        /* Thus, we may imagine a concurrent thread upgrading the FIFO somewhere during the caller's execution. Thus
+        /* Again, we may imagine a concurrent thread upgrading the FIFO somewhere during the caller's execution. Thus
          * this is an abnormal usage of the various stacks */
+        /*@ assert \false; */
         log_printf("USBOTG][HS] buf overflow detected!\n");
         errcode = MBED_ERROR_NOMEM;
         goto err;
@@ -718,13 +710,12 @@ err:
     FIXME : assigns \nothing for behavior fifo_not_null : not validated by WP
 */
 /*@
-    @ requires \valid_read(src);
-    @ requires \separated(src,&usbotghs_ctx);
-     @   assigns usbotghs_ctx ;
-
-    @ behavior not_configured:
-    @   assumes (usbotghs_ctx.in_eps[epid].configured == \false) ;
-    @   ensures \result == MBED_ERROR_INVPARAM ;
+    @ requires 0 <= epid < USBOTGHS_MAX_IN_EP;
+    @ requires size > 0;
+    @ requires \valid_read(src+(0..size-1));
+    @ requires usbotghs_ctx.in_eps[epid].configured == \true;
+    @ requires \separated(src+(0..size-1),&usbotghs_ctx);
+    @   assigns usbotghs_ctx ;
 
     @ behavior fifo_not_null:
     @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
@@ -756,10 +747,6 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
         /* transmition is done using out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
 #endif
-    if (!ep->configured) {
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
     if (ep->fifo_lck == true) {
         /* a DMA transaction is currently being executed toward the recv FIFO.
          * Wait for it to finish before resetting it */

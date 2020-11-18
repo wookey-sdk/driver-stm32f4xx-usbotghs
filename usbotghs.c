@@ -421,16 +421,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     uint32_t fifo_size = 0;
     usbotghs_context_t *ctx = usbotghs_get_context();
 
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err_init;
-    }
-
     usbotghs_ep_t *ep = NULL;
 
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
 
-    if(ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW)
+    if(ep_id >= USBOTGHS_MAX_IN_EP)
     {
         errcode = MBED_ERROR_INVPARAM;
         goto err_init;
@@ -446,14 +441,20 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     ep = &ctx->out_eps[ep_id];
 #endif
 
-
-    if (!ep->configured || !ep->mpsize) {
+    /* @ assert ep == &usbotghs_ctx.in_eps[ep_id] ; */
+    if (src == NULL) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (size == 0) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (ep->configured != true || ep->mpsize == 0) {
         log_printf("[USBOTG][HS] ep %d not configured\n", ep->id);
         errcode = MBED_ERROR_INVSTATE;
-        goto err_init;
+        goto err;
     }
-
-    /* @ assert ep == &usbotghs_ctx.in_eps[ep_id] ; */
 
     fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
 
@@ -465,9 +466,12 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     }
     /* giving these three assertions, next call to usbotghs_write_epx_fifo() should has its
      * preconditions granted. */
+    /* Here are the postconditions of a **valid** set_xmit_fifo() execution: */
+    /*@ assert \valid(ep->fifo+(0..ep->fifo_size-1));*/
     /*@ assert ep->fifo_size == size; */
     /*@ assert ep->fifo_idx == 0; */
     /*@ assert ep->mpsize <= fifo_size; */
+    /*@ assert ep->fifo_lck == \false; */
 
     /*
      * Here, we have to split the src content, taking into account the
@@ -699,11 +703,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 err:
     /* From whatever we come from to this point, the current transfer is complete
      * (with failure or not on upper level). IEPINT can inform the upper layer */
-#if defined(__FRAMAC__)
-    usbotghs_ctx.in_eps[ep_id].state = USBOTG_HS_EP_STATE_IDLE ;
-#else
     ep->state = USBOTG_HS_EP_STATE_IDLE;
-#endif/*__FRAMAC__*/
 err_init:
     return errcode;
 }

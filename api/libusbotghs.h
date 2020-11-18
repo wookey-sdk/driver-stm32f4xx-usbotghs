@@ -234,30 +234,38 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
  * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
 /*@
-    @ requires \valid(src);
     @ requires \separated(src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id];
     @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
 
-    @ behavior bad_ctx:
-    @   assumes &usbotghs_ctx == \null ;
-    @   ensures \result == MBED_ERROR_INVSTATE ;
 
     @ behavior bad_ep:
-    @   assumes &usbotghs_ctx != \null ;
-    @   assumes (ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW) ;
+    @   assumes (ep_id >= USBOTGHS_MAX_IN_EP) ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
 
+    @ behavior bad_src:
+    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
+    @   assumes src == NULL;
+    @   ensures \result == MBED_ERROR_INVPARAM;
+
+    @ behavior bad_size:
+    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
+    @   assumes src != NULL;
+    @   assumes size == 0;
+    @   ensures \result == MBED_ERROR_INVPARAM;
+
     @ behavior not_configured:
-    @   assumes &usbotghs_ctx != \null ;
-    @   assumes !(ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW) ;
-    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \false) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
+    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
+    @   assumes src != NULL;
+    @   assumes size > 0;
+    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured != \true) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
     @   ensures \result == MBED_ERROR_INVSTATE ;
 
     @ behavior configured:
-    @   assumes &usbotghs_ctx != \null ;
-    @   assumes !(ep_id >= USBOTGHS_MAX_IN_EP || ep_id >= MAX_EP_HW) ;
-    @   assumes !((usbotghs_ctx.in_eps[ep_id].configured == \false) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
+    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
+    @   assumes src != NULL;
+    @   assumes size > 0;
+    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \true) && (usbotghs_ctx.in_eps[ep_id].mpsize > 0));
     @   ensures \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE ;
 
     @ complete behaviors ;

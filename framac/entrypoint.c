@@ -148,7 +148,7 @@ void init_driver(void)
     mbed_error_t errcode;
     uint8_t ep_id = Frama_C_interval_8(0,255);
     usbotghs_ep_type_t type = Frama_C_interval_8(0,3);
-    usbotghs_dev_mode_t mode = Frama_C_interval_8(2,255);
+    usbotghs_dev_mode_t mode = Frama_C_interval_8(0,255);
     usbotghs_ep_dir_t dir = Frama_C_interval_8(0,1);
 
     errcode = usbotghs_declare();
@@ -241,6 +241,12 @@ void test_fcn_driver_eva(void)
 #endif
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 0);
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 1);
+    usbotghs_set_recv_fifo((uint8_t *)&resp, size, 7); /* inexistant EP */
+
+    /* trying to set fifo while locked */
+    usbotghs_ctx.out_eps[1].fifo_lck = true;
+    usbotghs_set_recv_fifo((uint8_t *)&resp, size, 1);
+    usbotghs_ctx.out_eps[1].fifo_lck = false;
 
 #if 0
     usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);
@@ -263,6 +269,15 @@ void test_fcn_driver_eva(void)
     usbotghs_set_recv_fifo((uint8_t *)&resp, 512, 2);
     usbotghs_activate_endpoint(2, USB_BACKEND_DRV_EP_DIR_IN);
     usb_backend_drv_send_data((uint8_t *)&resp, 512, 2);
+    /* 4 bytes padding check in write_core_fifo(): */
+    usb_backend_drv_send_data((uint8_t *)&resp, 513, 2);
+    usb_backend_drv_send_data((uint8_t *)&resp, 514, 2);
+    usb_backend_drv_send_data((uint8_t *)&resp, 515, 2);
+
+    /* simulating async lock */
+    usbotghs_ctx.in_eps[2].fifo_lck = true;
+    usb_backend_drv_send_data((uint8_t *)&resp, 512, 2);
+    usbotghs_ctx.in_eps[2].fifo_lck = false;
 
 
     usbotghs_txfifo_flush_all();
@@ -355,6 +370,16 @@ void test_fcn_isr_events(void)
     intsts = (1 << 19) | (1 << 4);
     intmsk = (1 << 19) | (1 << 4);
     USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
+    /* Here we set the EPNum to 4 (not configured), bcnt=5 */
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 4, USBOTG_HS_GRXSTSP_EPNUM);
+    set_reg(r_CORTEX_M_USBOTG_HS_GRXSTSP, 5, USBOTG_HS_GRXSTSP_BCNT);
+
+    /* handling OEPInt Handler */
+    intsts = (1 << 19) | (1 << 4);
+    intmsk = (1 << 19) | (1 << 4);
+    USBOTGHS_IRQHandler((uint8_t)OTG_HS_IRQ, intsts, intmsk);
+
 
 
     /* transmission check (iepint) */
