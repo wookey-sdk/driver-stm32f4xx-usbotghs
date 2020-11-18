@@ -248,8 +248,14 @@ static mbed_error_t reset_handler(void)
         }
 #endif
     /* flushing FIFOs */
-    usbotghs_txfifo_flush(0);
-    usbotghs_rxfifo_flush(0);
+    if (ctx->in_eps[0].configured == true) {
+        // reset may happen when multiple EPs are configured, all FIFOs need to be flushed.
+        usbotghs_txfifo_flush_all();
+    } else {
+        /* net yet confiured case, force flush only for EP0 */
+        usbotghs_txfifo_flush(0);
+        usbotghs_rxfifo_flush(0);
+    }
 
     log_printf("[USB HS][RESET] set EP0 as configured\n");
     /* Now EP0 is configued. Set this information in the driver context */

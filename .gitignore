@@ -1,3 +1,4 @@
 *.sw[op]
 *~
 .frama-c/
+framac/results/*.session
