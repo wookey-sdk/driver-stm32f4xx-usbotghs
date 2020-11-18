@@ -103,9 +103,6 @@ usbotghs_context_t *usbotghs_get_context(void);
 
 #include "libusbctrl.h"
 
-/* exported for direct test/full traversal */
-mbed_error_t usbotghs_is_epx_fifo_valid(uint32_t size, uint8_t ep_id, uint8_t ep_dir);
-
 #endif/*__FRAMAC__*/
 
 #endif/*LIBUSBOTGHS_FRAMAC_H_*/

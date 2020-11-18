@@ -239,8 +239,6 @@ void test_fcn_driver_eva(void)
 #endif
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 0);
     usbotghs_set_recv_fifo((uint8_t *)&resp, size, 1);
-    usbotghs_is_epx_fifo_valid(size, 0, USBOTG_HS_EP_DIR_OUT);
-    usbotghs_is_epx_fifo_valid(size, 1, USBOTG_HS_EP_DIR_OUT);
 
 #if 0
     usb_backend_drv_configure_endpoint(ep_id,type,dir,64,USB_BACKEND_EP_ODDFRAME,&handler_ep);

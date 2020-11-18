@@ -380,59 +380,6 @@ err:
 }
 
 
-/*@
-  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..));
-  @ assigns \nothing;
-  */
-mbed_error_t usbotghs_is_epx_fifo_valid(uint32_t size, uint8_t ep_id, uint8_t ep_dir)
-{
-    mbed_error_t errcode = MBED_ERROR_NONE;
-    usbotghs_context_t *ctx = usbotghs_get_context();
-    /*@ assert \valid(ctx); */
-    usbotghs_ep_t*      ep = NULL;
-
-    switch (ep_dir) {
-        case USBOTG_HS_EP_DIR_IN:
-            if (ep_id >= USBOTGHS_MAX_IN_EP) {
-                errcode = MBED_ERROR_INVPARAM;
-                goto err;
-            }
-            ep = &(ctx->in_eps[ep_id]);
-            break;
-        case USBOTG_HS_EP_DIR_OUT:
-            if (ep_id >= USBOTGHS_MAX_OUT_EP) {
-                errcode = MBED_ERROR_INVPARAM;
-                goto err;
-            }
-            ep = &(ctx->out_eps[ep_id]);
-            break;
-        default:
-            errcode = MBED_ERROR_INVPARAM;
-            goto err;
-    }
-
-    /*@ assert \valid(ep); */
-
-    if (ep->configured == false) {
-        log_printf("[USBOTG][HS] EPx %d not configured\n", ep->id);
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
-    if (ep->fifo == NULL) {
-        log_printf("[USBOTG][HS] EPx %d FIFO not set\n", ep->id);
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
-    if (ep->fifo_size < size) {
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
-
-    /*@ assert \valid(ep->fifo+(0..ep->fifo_size)); */
-err:
-    return errcode;
-}
-
 /*
  * read from Core EPx FIFO to associated RAM FIFO for given EP.
  * The EP must be a receiver EP (IN in host mode, OUT in device mode)

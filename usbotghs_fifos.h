@@ -66,6 +66,4 @@ mbed_error_t usbotghs_txfifo_flush_all(void);
 
 mbed_error_t usbotghs_rxfifo_flush(uint8_t ep_id);
 
-mbed_error_t usbotghs_is_epx_fifo_valid(uint32_t size, uint8_t ep_id, uint8_t ep_dir);
-
 #endif/*!USBOTGHS_FIFOS_H_*/
