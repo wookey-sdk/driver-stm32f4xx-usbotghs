@@ -502,13 +502,13 @@ err:
  * permit packet transmission. As a consequence, comparison to FIFO MAX SZ is not
  * needed.
  */
-
+// PMO todo assigns a raffiner
 /*@
     @ requires ep_id < USBOTGHS_MAX_IN_EP;
     @ requires 0 < size <= USBOTG_HS_TX_CORE_FIFO_SZ;
     @ requires \valid(usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
     @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..),usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (size-1))));
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),usbotghs_ctx.in_eps[ep_id],*(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (size-1))));
 
     @ behavior badfifo:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo == NULL;
@@ -671,6 +671,8 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 #if CONFIG_USR_DEV_USBOTGHS_DMA
     /* configuring DMA for this FIFO */
     /* set EP0 FIFO using local buffer */
+    /*@ assert  r_CORTEX_M_USBOTG_HS_DOEPDMA(epid) \in ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)); */
+	//pmo pour les assigns
 	write_reg_value(r_CORTEX_M_USBOTG_HS_DOEPDMA(epid),
                     dst);
 #endif
@@ -678,7 +680,11 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
     if (epid > 0) {
         /* configure EP for receiving size amount of data */
         uint32_t pktcount = size / ep->mpsize + (size & (ep->mpsize - 1) ? 1: 0);
-        set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), pktcount, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
+	/*@ assert  r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid) \in ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)); */
+	//pmo pour les assigns
+	set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), pktcount, USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(epid), USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(epid));
+	/*@ assert  r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid) \in ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)); */
+	//pmo pour les assigns
         set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(epid), size, USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(epid), USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep));
     } else {
         /* for EP0, the IP is not able to handle more than 64 bytes per
@@ -711,17 +717,16 @@ err:
     @ requires \valid_read(src+(0..size-1));
     @ requires usbotghs_ctx.in_eps[epid].configured == \true;
     @ requires \separated(src+(0..size-1),&usbotghs_ctx);
-    @   assigns usbotghs_ctx ;
 
-    @ behavior fifo_not_null:
-    @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
+    @ behavior fifo_lock:
     @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
+    @   assigns \nothing ;
 
-    @ behavior fifo_null:
-    @   assumes !(usbotghs_ctx.in_eps[epid].configured == \false) ;
+    @ behavior fifo_not_lck:
     @   assumes !(usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_NONE ;
+    @   assigns usbotghs_ctx.in_eps[epid].fifo, usbotghs_ctx.in_eps[epid].fifo_lck, usbotghs_ctx.in_eps[epid].fifo_idx,usbotghs_ctx.in_eps[epid].fifo_size ;
 
 
     @ complete behaviors;
@@ -744,12 +749,20 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
         ep = &(ctx->out_eps[epid]);
 #endif
     if (ep->fifo_lck == true) {
-        /* a DMA transaction is currently being executed toward the recv FIFO.
-         * Wait for it to finish before resetting it */
-        /*@ assert usbotghs_ctx.in_eps[epid].fifo_lck == \true ; */
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
+      /* a DMA transaction is currently being executed toward the recv FIFO.
+       * Wait for it to finish before resetting it */
+      /*@ assert ep->fifo_lck == \at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre); */
+      /*@ assert usbotghs_ctx.in_eps[epid].fifo_lck == \true ; */
+      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo,Pre) == usbotghs_ctx.in_eps[epid].fifo; */
+      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_idx,Pre) == usbotghs_ctx.in_eps[epid].fifo_idx; */
+      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre) == usbotghs_ctx.in_eps[epid].fifo_lck; */
+      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_size,Pre) == usbotghs_ctx.in_eps[epid].fifo_size; */
+      
+      errcode = MBED_ERROR_INVSTATE;
+      /*@ assert (\at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre)==\true) ==> errcode==MBED_ERROR_INVSTATE; */
+      goto err;
     }
+    /*@ assert errcode != MBED_ERROR_INVSTATE ; */
 
     log_printf("[USBOTG][HS] set ep %d TxFIFO to %p (size %d)\n", ep->id, src, size);
 
@@ -767,7 +780,11 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 
     /* FIFO is now configured */
 err:
-    return errcode;
+	/*@ assert errcode== MBED_ERROR_INVSTATE <==> ep->fifo_lck == \true ;*/
+	/*@ assert errcode== MBED_ERROR_INVSTATE <==> \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre) == \true ;*/
+	/* @ assert errcode== MBED_ERROR_INVSTATE <==> \at(usbotghs_ctx.in_eps[epid],Pre) == usbotghs_ctx.in_eps[epid]; */
+	/*@ assert (\at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre)==\true) ==> \at(usbotghs_ctx.in_eps[epid],Pre) == usbotghs_ctx.in_eps[epid]; */
+	return errcode;
 }
 
 /*@

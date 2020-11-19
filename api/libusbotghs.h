@@ -305,11 +305,11 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
 
 /*@
   @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid];
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid].fifo, usbotghs_ctx.out_eps[epid].fifo_size, usbotghs_ctx.out_eps[epid].fifo_idx, usbotghs_ctx.out_eps[epid].fifo_lck;
   @ assigns \result \from indirect:epid, indirect:dst, indirect:size;
 
   @ behavior invdst:
-  @    assumes dst == NULL;
+  @    assumes !(\valid(dst));
   @    ensures \result == MBED_ERROR_INVPARAM;
 
   @ behavior badepid:
