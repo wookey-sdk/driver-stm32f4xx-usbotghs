@@ -153,7 +153,8 @@ mbed_error_t usbotghs_declare(void)
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mask =
         USBOTG_HS_GINTMSK_OEPINT_Msk   |
         USBOTG_HS_GINTMSK_IEPINT_Msk   |
-        //XXX:                 USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
+        //XXX:
+        USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
         USBOTG_HS_GINTMSK_PTXFEM_Msk   |
         USBOTG_HS_GINTMSK_RXFLVLM_Msk;
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mode = 1; /* binary inversion */
