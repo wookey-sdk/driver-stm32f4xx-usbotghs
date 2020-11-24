@@ -392,7 +392,7 @@ err:
 
 
   @ behavior nofifo:
-  @    assumes usbotghs_ctx.out_eps[ep_id].configured == \false;
+  @    assumes usbotghs_ctx.out_eps[ep_id].configured != \false;
   @    assumes usbotghs_ctx.out_eps[ep_id].fifo == NULL;
   @    ensures \result == MBED_ERROR_INVPARAM;
 
@@ -712,6 +712,11 @@ err:
     FIXME : assigns \nothing for behavior fifo_not_null : not validated by WP
 */
 /*@
+    @ requires \valid(&usbotghs_ctx.in_eps[epid]);
+    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo);
+    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo_idx);
+    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo_size);
+    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo_lck);
     @ requires 0 <= epid < USBOTGHS_MAX_IN_EP;
     @ requires size > 0;
     @ requires \valid_read(src+(0..size-1));
