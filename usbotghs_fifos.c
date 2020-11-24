@@ -152,7 +152,7 @@ mbed_error_t usbotghs_read_core_fifo(uint8_t * const dest, const uint32_t size, 
     @ requires \valid_read(src + (0 .. size-1));
     @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
     @ requires \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)ep + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK);
 */
 
 /*  requires ep < USBOTGHS_MAX_IN_EP needed for memory space :
@@ -187,7 +187,7 @@ static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, u
         @ loop invariant ep < USBOTGHS_MAX_IN_EP ;
         @ loop invariant (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
         @ loop invariant \separated(src,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-        @ loop assigns i, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), tmp, src ;
+	@ loop assigns i, tmp, src, *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)ep + 1)))));
         @ loop variant (size_4bytes - i) ;
     */
 
@@ -197,6 +197,7 @@ static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, u
         tmp |= (uint32_t)(src[2] & 0xff) << 16;
         tmp |= (uint32_t)(src[3] & 0xff) << 24;
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
+	
     }
     tmp = 0;
     switch (size & 3) {
