@@ -153,7 +153,6 @@ mbed_error_t usbotghs_declare(void)
     usbotghs_ctx.dev.irqs[0].posthook.action[3].and.mask =
         USBOTG_HS_GINTMSK_OEPINT_Msk   |
         USBOTG_HS_GINTMSK_IEPINT_Msk   |
-        //XXX:
         USBOTG_HS_GINTMSK_NPTXFEM_Msk  |
         USBOTG_HS_GINTMSK_PTXFEM_Msk   |
         USBOTG_HS_GINTMSK_RXFLVLM_Msk;
@@ -606,7 +605,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #ifdef __FRAMAC__
     uint8_t cpt = 0;
 #endif
-    // 
+    //
     /* this loop doesn't have loop invariant for loop counters as there is no sequencial decrement upto 0 with a step of 1 */
     /*@
       @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
@@ -625,7 +624,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
             }
         }
 #else
-  
+
         /*@
           @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
           @ loop invariant 0<=cpt<= CPT_HARD ;
@@ -1208,20 +1207,16 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
     usbotghs_context_t *ctx = usbotghs_get_context();
     /*@ assert ctx == &usbotghs_ctx; */
 
-    /* sanitize */
-    if(ep >= USBOTGHS_MAX_IN_EP)
-    {
-        errcode = MBED_ERROR_INVPARAM;
-        goto err;
-    }
     clear_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
 
-    if (ctx->in_eps[ep].configured == true) {
-        /* FIX: flushing fifo for each EP */
-        usbotghs_txfifo_flush(ep);
+    if(ep < USBOTGHS_MAX_IN_EP) {
+        if (ctx->in_eps[ep].configured == true) {
+            /* FIX: flushing fifo for each EP */
+            usbotghs_txfifo_flush(ep);
 
-        clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
-                USBOTG_HS_DIEPCTL_EPENA_Msk);
+            clear_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep),
+                    USBOTG_HS_DIEPCTL_EPENA_Msk);
+        }
     }
 
     if(ep < USBOTGHS_MAX_OUT_EP) {
@@ -1237,7 +1232,6 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
     set_reg_bits(r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_GINTMSK_NPTXFEM_Msk | USBOTG_HS_GINTMSK_RXFLVLM_Msk);
 
     /*@ assert errcode == MBED_ERROR_NONE; */
-err:
     return errcode;
 }
 
@@ -1253,12 +1247,6 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               ep_id,
         usbotghs_ep_dir_t     dir)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
-    usbotghs_context_t *ctx = usbotghs_get_context();
-    /* sanitize */
-    if (ctx == NULL) {
-        errcode = MBED_ERROR_INVSTATE;
-        goto err;
-    }
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
             if (ep_id >= USBOTGHS_MAX_IN_EP) {
@@ -1369,7 +1357,6 @@ mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
     /*@ assert errcode == MBED_ERROR_NONE; */
 err:
     return errcode;
-
 }
 
 /* enable a previously disabled Endpoint */

@@ -197,7 +197,7 @@ static inline void usbotghs_write_core_fifo(uint8_t *src, const uint32_t size, u
         tmp |= (uint32_t)(src[2] & 0xff) << 16;
         tmp |= (uint32_t)(src[3] & 0xff) << 24;
         write_reg_value(USBOTG_HS_DEVICE_FIFO(ep), tmp);
-	
+
     }
     tmp = 0;
     switch (size & 3) {
@@ -510,7 +510,7 @@ err:
     @ requires \valid(&usbotghs_ctx.in_eps[ep_id].fifo_size);
     @ requires \valid(usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
     @ requires \separated( ((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))),(uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK ,&num_ctx,ctx_list+(..),&usbotghs_ctx.in_eps[ep_id].fifo[\at(usbotghs_ctx.in_eps[ep_id].fifo_idx,Pre)],&usbotghs_ctx.in_eps[ep_id]+(0..sizeof(usbotghs_context_t)));
-   
+
 
     @ behavior fifolocked:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
@@ -709,7 +709,7 @@ err:
     @ behavior fifo_lock:
     @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
-    @   assigns \nothing;  
+    @   assigns \nothing;
 
     @ behavior fifo_not_lck:
     @   assumes !(usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
