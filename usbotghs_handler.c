@@ -225,40 +225,42 @@ static mbed_error_t reset_handler(void)
                  USBOTG_HS_DIEPMSK_XFRCM_Msk |
                  USBOTG_HS_DIEPMSK_TOM_Msk);
 
-    log_printf("[USB HS][RESET] initialize global fifo\n");
-    if ((errcode = usbotghs_init_global_fifo()) != MBED_ERROR_NONE) {
-        goto err;
-    }
-
     log_printf("[USB HS][RESET] initialize EP0 fifo\n");
     /* fifo is RESET, in both Core registers and EP context. The FIFO will need
      * to be reconfigured later by the driver API (typically through upper
      * reset handler */
-# if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-        /* set TxFIFO for EP0 (in_eps[0]) */
-        log_printf("[USB HS][RESET] initialize EP0 TxFIFO in device mode\n");
-        if ((errcode = usbotghs_reset_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
-            goto err;
-        }
-#else
-        /* set TxFIFO for EP0 (out_eps[0]) */
-        log_printf("[USB HS][RESET] initialize EP0 TxFIFO in host mode\n");
-        if ((errcode = usbotghs_reset_epx_fifo(&(ctx->out_eps[0]))) != MBED_ERROR_NONE) {
-            goto err;
-        }
-#endif
-    /* flushing FIFOs */
     if (ctx->in_eps[0].configured == true) {
         // reset may happen when multiple EPs are configured, all FIFOs need to be flushed.
         usbotghs_txfifo_flush_all();
-    } else {
-        /* net yet confiured case, force flush only for EP0 */
-        usbotghs_txfifo_flush(0);
-        usbotghs_rxfifo_flush(0);
     }
+# if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+    /* set TxFIFO for EP0 (in_eps[0]) */
+    log_printf("[USB HS][RESET] initialize EP0 TxFIFO in device mode\n");
+    if ((errcode = usbotghs_reset_epx_fifo(&(ctx->in_eps[0]))) != MBED_ERROR_NONE) {
+        goto err;
+    }
+#else
+    /* set TxFIFO for EP0 (out_eps[0]) */
+    log_printf("[USB HS][RESET] initialize EP0 TxFIFO in host mode\n");
+    if ((errcode = usbotghs_reset_epx_fifo(&(ctx->out_eps[0]))) != MBED_ERROR_NONE) {
+        goto err;
+    }
+#endif
+    /* flushing FIFOs */
+    /* net yet confiured case, force flush only for EP0 */
+    usbotghs_txfifo_flush(0);
+    usbotghs_rxfifo_flush(0);
+
+    /* reinit FIFO index and EP0 FIFO. This update ctx->fifo_idx to EP0 FIFO set only */
+    log_printf("[USB HS][RESET] initialize global fifo\n");
+    if ((errcode = usbotghs_init_global_fifo()) != MBED_ERROR_NONE) {
+        goto err;
+    }
+    /* at this time, ctx->fifo_idx is set to EP0 FIFO size only. EP0 buffer are not yet configued */
+
 
     log_printf("[USB HS][RESET] set EP0 as configured\n");
-    /* Now EP0 is configued. Set this information in the driver context */
+    /* Now EP0 is configured. Set this information in the driver context */
     ctx->in_eps[0].configured = true;
     ctx->out_eps[0].configured = true;
 
@@ -266,6 +268,7 @@ static mbed_error_t reset_handler(void)
      * function should always reconfigure the FIFO structure */
     log_printf("[USB HS][RESET] call usb ctrl plane reset\n");
     usbctrl_handle_reset(usb_otg_hs_dev_infos.id);
+    /* Now, the upper layer should have set the driver FIFO to the correct buffer for EP0 */
 
     /* now that USB full stack execution is done, Enable Endpoint.
      * From now on, data can be received or sent on Endpoint 0 */

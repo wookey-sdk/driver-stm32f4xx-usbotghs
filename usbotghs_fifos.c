@@ -757,7 +757,7 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
       /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_idx,Pre) == usbotghs_ctx.in_eps[epid].fifo_idx; */
       /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre) == usbotghs_ctx.in_eps[epid].fifo_lck; */
       /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_size,Pre) == usbotghs_ctx.in_eps[epid].fifo_size; */
-      
+
       errcode = MBED_ERROR_INVSTATE;
       /*@ assert (\at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre)==\true) ==> errcode==MBED_ERROR_INVSTATE; */
       goto err;
