@@ -753,30 +753,27 @@ err:
 
 /* epid check done by calling function, usbotghs_send_data
     TODO : add !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE behavior and CONFIG_USR_DEV_USBOTGHS_DMA behavior
-    FIXME : assigns \nothing for behavior fifo_not_null : not validated by WP
 */
 /*@
     @ requires \valid_read(&usbotghs_ctx.in_eps[epid]);
-    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo);
-    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo_idx);
-    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo_size);
-    @ requires \valid(&usbotghs_ctx.in_eps[epid].fifo_lck);
+    @ requires \valid_read(&usbotghs_ctx.in_eps[epid].fifo_lck);
     @ requires 0 <= epid < USBOTGHS_MAX_IN_EP;
     @ requires size > 0;
     @ requires \valid_read(src+(0..size-1));
     @ requires usbotghs_ctx.in_eps[epid].configured == \true;
-    @ requires \separated(src+(0..size-1),&usbotghs_ctx);
+    @ requires \separated(src+(0..size-1),&usbotghs_ctx.in_eps[epid].fifo_lck, &usbotghs_ctx.in_eps[epid].fifo_size,&usbotghs_ctx.in_eps[epid].fifo_idx,&usbotghs_ctx.in_eps[epid].fifo);
 
     @ behavior fifo_lock:
     @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
     @   ensures \result == MBED_ERROR_INVSTATE ;
-    @   ensures \at(usbotghs_ctx.in_eps[epid].fifo_idx,Pre) == usbotghs_ctx.in_eps[epid].fifo_idx; 
-    @   ensures \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre) == usbotghs_ctx.in_eps[epid].fifo_lck; 
-    @   ensures \at(usbotghs_ctx.in_eps[epid].fifo_size,Pre) == usbotghs_ctx.in_eps[epid].fifo_size; 
-    @   assigns usbotghs_ctx.in_eps[epid].fifo, usbotghs_ctx.in_eps[epid].fifo_lck, usbotghs_ctx.in_eps[epid].fifo_idx,usbotghs_ctx.in_eps[epid].fifo_size ; 
+    @   assigns \nothing;  
 
     @ behavior fifo_not_lck:
     @   assumes !(usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
+    @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo_lck);
+    @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo);
+    @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo_idx);
+    @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo_size);
     @   ensures \result == MBED_ERROR_NONE ;
     @   assigns usbotghs_ctx.in_eps[epid].fifo, usbotghs_ctx.in_eps[epid].fifo_lck, usbotghs_ctx.in_eps[epid].fifo_idx,usbotghs_ctx.in_eps[epid].fifo_size ;
 
@@ -792,7 +789,6 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         /* transmition is done using in_eps in device mode */
         ep = &(ctx->in_eps[epid]);
-        /*@ assert ep == &usbotghs_ctx.in_eps[epid] ; */
 #else
         /* transmition is done using out_eps in device mode */
         ep = &(ctx->out_eps[epid]);
@@ -800,19 +796,11 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
     if (ep->fifo_lck == true) {
       /* a DMA transaction is currently being executed toward the recv FIFO.
        * Wait for it to finish before resetting it */
-      /*@ assert ep->fifo_lck == \at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre); */
-      /*@ assert usbotghs_ctx.in_eps[epid].fifo_lck == \true ; */
-      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo,Pre) == usbotghs_ctx.in_eps[epid].fifo; */
-      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_idx,Pre) == usbotghs_ctx.in_eps[epid].fifo_idx; */
-      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre) == usbotghs_ctx.in_eps[epid].fifo_lck; */
-      /*@ assert \at(usbotghs_ctx.in_eps[epid].fifo_size,Pre) == usbotghs_ctx.in_eps[epid].fifo_size; */
-      
       errcode = MBED_ERROR_INVSTATE;
       /*@ assert (\at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre)==\true) ==> errcode==MBED_ERROR_INVSTATE; */
       goto err;
     }
-    /*@ assert errcode != MBED_ERROR_INVSTATE ; */
-
+    /*@ assert errcode != MBED_ERROR_INVSTATE && \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre)!= \true; */
     log_printf("[USBOTG][HS] set ep %d TxFIFO to %p (size %d)\n", ep->id, src, size);
 
     set_bool_with_membarrier(&(ep->fifo_lck), true);
@@ -829,10 +817,6 @@ mbed_error_t usbotghs_set_xmit_fifo(uint8_t *src, uint32_t size, uint8_t epid)
 
     /* FIFO is now configured */
 err:
-	/*@ assert errcode== MBED_ERROR_INVSTATE <==> ep->fifo_lck == \true ;*/
-	/*@ assert errcode== MBED_ERROR_INVSTATE <==> \at(usbotghs_ctx.in_eps[epid].fifo_lck,Pre) == \true ;*/
-	/* @ assert errcode== MBED_ERROR_INVSTATE <==> \at(usbotghs_ctx.in_eps[epid],Pre) == usbotghs_ctx.in_eps[epid]; */
-	/*@ assert (\at(usbotghs_ctx.in_eps[epid].fifo_lck, Pre)==\true) ==> \at(usbotghs_ctx.in_eps[epid],Pre) == usbotghs_ctx.in_eps[epid]; */
 	return errcode;
 }
 
