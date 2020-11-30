@@ -502,39 +502,6 @@ err:
  * needed.
  */
 
-/* @
-    @ requires ep_id < USBOTGHS_MAX_IN_EP;
-    @ requires 0 < size <= USBOTG_HS_TX_CORE_FIFO_SZ;
-    @ requires \valid(usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
-    @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..),usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
-    @ assigns  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int) usbotghs_ctx.in_eps[ep_id].id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep_id],*(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (size-1))));
-
-    @ behavior badfifo:
-    @    assumes !(\valid(usbotghs_ctx.in_eps[ep_id].fifo));
-    @    ensures \result == MBED_ERROR_INVPARAM;
-
-    @ behavior fifolocked:
-    @    assumes \valid(usbotghs_ctx.in_eps[ep_id].fifo);
-    @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
-    @    ensures \result == MBED_ERROR_INVSTATE;
-
-    @ behavior fifotoosmall:
-    @    assumes \valid(usbotghs_ctx.in_eps[ep_id].fifo);
-    @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
-    @    assumes (size > usbotghs_ctx.in_eps[ep_id].fifo_size || usbotghs_ctx.in_eps[ep_id].fifo_idx  > (usbotghs_ctx.in_eps[ep_id].fifo_size - size));
-    @    ensures \result == MBED_ERROR_NOMEM;
-
-    @ behavior ok:
-    @    assumes \valid(usbotghs_ctx.in_eps[ep_id].fifo);
-    @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
-    @    assumes (size <= usbotghs_ctx.in_eps[ep_id].fifo_size && usbotghs_ctx.in_eps[ep_id].fifo_idx  <= (usbotghs_ctx.in_eps[ep_id].fifo_size - size));
-    @    ensures \result == MBED_ERROR_NONE;
-
-    @ complete behaviors;
-    @ disjoint behaviors;
-
-*/
-//    @ requires \separated(&usbotghs_ctx, ((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)ep_id + 1))))),(uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK ,&num_ctx,ctx_list+(..),usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1),&usbotghs_ctx.in_eps[ep_id].fifo_lck,&usbotghs_ctx.in_eps[ep_id].fifo_idx);
 /*@
     @ requires ep_id < USBOTGHS_MAX_IN_EP;
     @ requires 0 < size <= USBOTG_HS_TX_CORE_FIFO_SZ;
@@ -542,18 +509,13 @@ err:
     @ requires \valid(&usbotghs_ctx.in_eps[ep_id].fifo_idx);
     @ requires \valid(&usbotghs_ctx.in_eps[ep_id].fifo_size);
     @ requires \valid(usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
-    @ requires \valid( r_CORTEX_M_USBOTG_HS_GINTMSK);
     @ requires \separated( ((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))),(uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK ,&num_ctx,ctx_list+(..),&usbotghs_ctx.in_eps[ep_id].fifo[\at(usbotghs_ctx.in_eps[ep_id].fifo_idx,Pre)],&usbotghs_ctx.in_eps[ep_id]+(0..sizeof(usbotghs_context_t)));
    
 
     @ behavior fifolocked:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
     @    ensures \result == MBED_ERROR_INVSTATE && usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
-    @    ensures \old(*((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))))==*((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1)))));
-    @    ensures \old(*((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK))==*((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK);
-    @    ensures \old(usbotghs_ctx.in_eps[ep_id].fifo_idx)==usbotghs_ctx.in_eps[ep_id].fifo_idx;
-    @    ensures \old(usbotghs_ctx.in_eps[ep_id].fifo)[\old(usbotghs_ctx.in_eps[ep_id].fifo_idx)]== usbotghs_ctx.in_eps[ep_id].fifo[\old(usbotghs_ctx.in_eps[ep_id].fifo_idx)];
-    @   assigns *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep_id].fifo_idx, usbotghs_ctx.in_eps[ep_id].fifo_lck, usbotghs_ctx.in_eps[ep_id].fifo[\at(usbotghs_ctx.in_eps[ep_id].fifo_idx,Pre)];
+    @   assigns usbotghs_ctx.in_eps[ep_id].fifo_lck;
 
     @ behavior fifotoosmall:
     @    assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \false;
@@ -570,9 +532,6 @@ err:
     @ complete behaviors;
     @ disjoint behaviors;
 */
-//    @   assigns *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep_id].fifo_idx, usbotghs_ctx.in_eps[ep_id].fifo_lck, usbotghs_ctx.in_eps[ep_id].fifo[\at(usbotghs_ctx.in_eps[ep_id].fifo_idx,Pre)];
-//    @ requires \separated( ((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)ep_id + 1))))),(uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK ,&num_ctx,ctx_list+(..),&usbotghs_ctx.in_eps[ep_id]+(0..sizeof(usbotghs_context_t)));
-  
 
 mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
 {
@@ -583,11 +542,6 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
     /* we consider that packet splitting is made by the caller (i.e. usbotghs_send()) */
     /* fixme: size > (USBOTG_HS_TX_CORE_FIFO_SZ - ep->fifo_idx) */
     ep = &(ctx->in_eps[ep_id]);
-    /* @ assert \valid(ep); */
-    /* @ assert \valid(ep->fifo+(0..ep->fifo_size-1)); */
-
-    /* @ assert \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..), usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1)); */
-    /* @ assert ep->fifo_lck == \at(usbotghs_ctx.in_eps[ep_id].fifo_lck, Pre); */
     /* Let's now do the read transaction itself... */
     if (ep->fifo_lck == true) {
         /* Tgus is not exactly dead code, but this check is a protection against reentrancy between the end of the
@@ -596,10 +550,9 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
         /*@ assert \false; */
         log_printf("[USBOTG][HS] invalid state! fifo already locked\n");
         errcode = MBED_ERROR_INVSTATE;
-	/* @ assert *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))) == *(\at((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1)))),Pre)); */
-	  /*@ assert *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK) == *(\at((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK,Pre)); */
         goto err;
     }
+    /*@ assert \at(usbotghs_ctx.in_eps[ep_id].fifo_lck,Pre)!=\true; */
     if (size > ep->fifo_size) {
         /* this should be unreachable code, as fifo_size, fifo_idx and size are correlated and controled by the caller */
         /* Again, we may imagine a concurrent thread upgrading the FIFO somewhere during the caller's execution. Thus
@@ -616,21 +569,11 @@ mbed_error_t usbotghs_write_epx_fifo(const uint32_t size, uint8_t ep_id)
     }
     set_bool_with_membarrier(&(ep->fifo_lck), true);
     /* FIFO should have been set with set_xmit_fifo, accordingly with its size */
-    /* @ assert \valid_read(ep->fifo + (0 .. (ep->fifo_idx+size-1))); */
-    /* @ assert ep->id */
-    /*@ assert \valid(&(ep->fifo[ep->fifo_idx]));*/
     usbotghs_write_core_fifo(&(ep->fifo[ep->fifo_idx]), size, ep->id);
     /* buffer overflow check */
     ep->fifo_idx += size;
     request_data_membarrier();
-    /*@ assert errcode == MBED_ERROR_NONE; */
 err:
-
-    /*@ assert errcode== MBED_ERROR_INVSTATE <==> \at(usbotghs_ctx.in_eps[ep_id].fifo_lck,Pre) == \true ;*/
-    /*@ assert errcode== MBED_ERROR_INVSTATE ==> usbotghs_ctx.in_eps[ep_id].fifo_lck == \true ;*/
-    /* @ assert errcode== MBED_ERROR_INVSTATE <==> \at(usbotghs_ctx.in_eps[ep_id],Pre) == usbotghs_ctx.in_eps[ep_id]; */
-    /*@ assert (\at(usbotghs_ctx.in_eps[ep_id].fifo_lck, Pre)==\true) ==> \at(usbotghs_ctx.in_eps[ep_id],Pre) == usbotghs_ctx.in_eps[ep_id]; */
-    /*@ assert (\at(usbotghs_ctx.in_eps[ep_id].fifo_lck, Pre)==\true) <==> errcode == MBED_ERROR_INVSTATE; */
     set_bool_with_membarrier(&(ep->fifo_lck), false);
     return errcode;
 }
