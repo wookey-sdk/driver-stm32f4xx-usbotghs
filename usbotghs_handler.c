@@ -370,7 +370,7 @@ static mbed_error_t oepint_handler(void)
         log_printf("[USBOTG][HS] handling received data\n");
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_OUT_EP;
-          @ loop assigns daint, ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+          @ loop assigns errcode, daint, ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].fifo_idx , *(register_t)((0x40040000 + 0xb08) + (int) (0 .. USBOTGHS_MAX_OUT_EP) * 0x20), *(register_t)((0x40040000 + 0xb00)  + (int) (0 .. USBOTGHS_MAX_OUT_EP) * 0x20) ,*r_CORTEX_M_USBOTG_HS_GINTMSK ;
           @ loop variant USBOTGHS_MAX_OUT_EP - ep_id;
           */
         for (ep_id = 0; ep_id < USBOTGHS_MAX_OUT_EP; ++ep_id) {
@@ -386,13 +386,16 @@ static mbed_error_t oepint_handler(void)
                 bool end_of_transfer = false;
                 if (doepint & USBOTG_HS_DOEPINT_STUP_Msk) {
                     log_printf("[USBOTG][HS] oepint: entering STUP\n");
+		    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		    /* @ assert r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id) \in ((register_t)(USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ; */
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_STUP_Msk);
                     callback_to_call = true;
                 }
                 /* Bit 0 XFRC: Data received complete */
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     log_printf("[USBOTG][HS] oepint: entering XFRC\n");
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
+		    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
                     if (ctx->out_eps[ep_id].fifo_idx == 0) {
                         /* ZLP transfer initialited from the HOST */
                         continue;
@@ -401,11 +404,13 @@ static mbed_error_t oepint_handler(void)
                     /* Here we set SNAK bit to avoid receiving data before the next read cmd config.
                      * If not, a race condition can happen, if RXFLVL handler is executed *before* the EP
                      * RxFIFO is set by the upper layer */
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
+		    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		   set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
                     /* XXX: defragmentation need to be checked for others (not EP0) EPs */
                     if (ctx->out_eps[ep_id].fifo_idx < ctx->out_eps[ep_id].fifo_size) {
                         /* handle defragmentation for DATA OUT packets on EP0 */
                         log_printf("[USBOTG][HS] fragment pkt %d total, %d read\n", ctx->out_eps[ep_id].fifo_size, ctx->out_eps[ep_id].fifo_idx);
+			/* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
                         set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                     } else {
                         log_printf("[USBOTG][HS] oepint for %d data size read\n", ctx->out_eps[ep_id].fifo_idx);
@@ -414,7 +419,8 @@ static mbed_error_t oepint_handler(void)
                 }
                 if (callback_to_call == true) {
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
-                    if (ctx->out_eps[ep_id].handler == NULL) {
+		    
+		    if (ctx->out_eps[ep_id].handler == NULL) {
                         goto err;
                     }
 #ifndef __FRAMAC__
@@ -422,16 +428,16 @@ static mbed_error_t oepint_handler(void)
                         goto err;
                     }
 #endif
+		    /*@ assert ctx->out_eps[ep_id].handler \in {usbctrl_handle_outepevent, &handler_ep} ;*/
+		    /*@ calls usbctrl_handle_outepevent, handler_ep; */
                     /* In FramaC context, upper handler is my_handle_outepevent */
-		    /*@  assert ctx->out_eps[ep_id].handler \in {&my_handle_outepevent, &handler_ep} ;*/
-		    /*@ calls my_handle_outepevent, handler_ep; */
-                    errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
+		    errcode = ctx->out_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                     ctx->out_eps[ep_id].fifo_idx = 0;
                     if (end_of_transfer == true && ep_id == 0) {
-                        /* We synchronously handle CNAK only for EP0 data. others EP are handled by dedicated upper layer
-                         * class level handlers */
-                        //log_printf("[USBOTG][HS] oepint: set CNAK (end of transfer)\n");
-                        //set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+		      /* We synchronously handle CNAK only for EP0 data. others EP are handled by dedicated upper layer
+		       * class level handlers */
+		      //log_printf("[USBOTG][HS] oepint: set CNAK (end of transfer)\n");
+		      //set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
                     }
                 }
                 /* XXX: only if SNAK set */
@@ -440,6 +446,7 @@ static mbed_error_t oepint_handler(void)
             }
             daint >>= 1;
         }
+	/* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_GINTMSK  <=  (register_t) USB_BACKEND_MEMORY_END; */
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
 #else
         /* TODO: (FIXME host mode not working yet) here, this is a 'end of transmission' interrupt. Let's handle each
@@ -494,7 +501,7 @@ static mbed_error_t iepint_handler(void)
         uint8_t ep_id = 0;
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_IN_EP;
-          @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
+          @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].core_txfifo_empty,daint,errcode,diepintx;
           @ loop variant USBOTGHS_MAX_IN_EP - ep_id;
           */
         for (ep_id = 0; ep_id < USBOTGHS_MAX_IN_EP; ++ep_id) {
@@ -512,43 +519,49 @@ static mbed_error_t iepint_handler(void)
 
                 /* Bit 7 TXFE: Transmit FIFO empty */
                 if (diepintx & USBOTG_HS_DIEPINT_TOC_Msk) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
+		  /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TXFE_Msk);
                     ctx->in_eps[ep_id].core_txfifo_empty = true;
                     log_printf("[USBOTG][HS] iepint: ep %d: TxFifo empty\n", ep_id);
                 }
 
                 /* Bit 6 INEPNE: IN endpoint NAK effective */
                 if (diepintx & USBOTG_HS_DIEPINT_INEPNE_Msk) {
+		   /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_INEPNE_Msk);
                     log_printf("[USBOTG][HS] iepint: ep %d: NAK effective\n", ep_id);
                 }
 
                 /* Bit 4 ITTXFE: IN token received when TxFIFO is empty */
                 if (diepintx & USBOTG_HS_DIEPINT_ITTXFE_Msk) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
-                    log_printf("[USBOTG][HS] iepint: ep %d: token rcv when fifo empty\n", ep_id);
+		   /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		  set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_ITTXFE_Msk);
+		  log_printf("[USBOTG][HS] iepint: ep %d: token rcv when fifo empty\n", ep_id);
                 }
 
                 /* Bit 3 TOC: Timeout condition */
                 if (diepintx & USBOTG_HS_DIEPINT_TOC_Msk) {
+		   /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
                     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_TOC_Msk);
                     log_printf("[USBOTG][HS] iepint: ep %d: timeout cond\n", ep_id);
                 }
 
                 /* bit 1 EPDISD: Endpoint disabled interrupt */
                 if (diepintx & USBOTG_HS_DIEPINT_EPDISD_Msk) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
-                    log_printf("[USBOTG][HS] iepint: ep %d: EP disabled\n", ep_id);
-                    /* Now the endpiont is really disabled
-                     * We should update enpoint status
-                     */
+		   /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		  set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_EPDISD_Msk);
+		  log_printf("[USBOTG][HS] iepint: ep %d: EP disabled\n", ep_id);
+		  /* Now the endpiont is really disabled
+		   * We should update enpoint status
+		   */
                 }
 
                 /* Bit 0 XFRC: Transfer completed interrupt */
                 if (diepintx & USBOTG_HS_DIEPINT_XFRC_Msk) {
-                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
-
-                    log_printf("[USBOTG][HS] iepint: ep %d: transfert completed\n", ep_id);
+		   /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		  set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
+		  
+		  log_printf("[USBOTG][HS] iepint: ep %d: transfert completed\n", ep_id);
 
                     /* inform upper layer only on end of effetvive transfer. A transfer may be
                      * the consequence of multiple FIFO flush, depending on the transfer size and
@@ -566,7 +579,8 @@ static mbed_error_t iepint_handler(void)
                             if (datasize > ctx->in_eps[ep_id].mpsize) {
                                 datasize = ctx->in_eps[ep_id].mpsize;
                             }
-                            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+			    /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+			    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
                                     1,
                                     USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
                                     USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
@@ -583,6 +597,7 @@ static mbed_error_t iepint_handler(void)
                             set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
                             /* inform libctrl of transfert complete */
 
+			   
                             if (ctx->in_eps[ep_id].handler == NULL) {
                                 goto err;
                             }
@@ -591,11 +606,10 @@ static mbed_error_t iepint_handler(void)
                                 goto err;
                             }
 #endif
-
-                            /* In FramaC context, upper handler is my_handle_inepevent */
-                            /*@  assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
+			    /*@ assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
                             /*@ calls  handler_ep; */
-                            errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                            /* In FramaC context, upper handler is my_handle_inepevent */
+			    errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
                             ctx->in_eps[ep_id].fifo_size = 0;
@@ -613,6 +627,7 @@ static mbed_error_t iepint_handler(void)
             }
             daint >>= 1;
         }
+	/*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_GINTMSK  <=  (register_t) USB_BACKEND_MEMORY_END; */
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
 #else
         /* here, this is a 'data received' interrupt  (Host mode) */

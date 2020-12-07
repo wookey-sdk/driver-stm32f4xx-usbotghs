@@ -602,7 +602,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /*@
       @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
       @ loop invariant fifo_size >0 ;
-      @ loop assigns cpt,residual_size, ep->state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep->id], *(usbotghs_ctx.in_eps[ep->id].fifo+(usbotghs_ctx.in_eps[ep->id].fifo_idx..(usbotghs_ctx.in_eps[ep->id].fifo_idx + (USBOTG_HS_TX_CORE_FIFO_SZ - 1))));
+      @ loop assigns  cpt,usbotghs_ctx.in_eps[ep_id].state, residual_size, *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,LoopEntry)];
       @ loop variant residual_size ;
       */
     while (residual_size >= fifo_size) {

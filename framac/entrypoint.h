@@ -36,7 +36,7 @@ uint32_t Frama_C_interval_32(uint32_t min, uint32_t max);
 /*@
   @ assigns \nothing;
   */
-static inline mbed_error_t handler_ep(uint32_t dev_id, uint32_t size, uint8_t ep_id)
+ mbed_error_t handler_ep(uint32_t dev_id, uint32_t size, uint8_t ep_id)
 {
         mbed_error_t errcode = MBED_ERROR_NONE;
             return errcode;
