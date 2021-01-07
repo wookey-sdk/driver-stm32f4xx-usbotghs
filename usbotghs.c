@@ -25,6 +25,7 @@
 
 #include "libc/syscall.h"
 #include "libc/stdio.h"
+#include "libc/sync.h"
 #include "libc/nostd.h"
 #include "libc/string.h"
 
@@ -523,7 +524,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),1,USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),ep->mpsize,USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id), USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
     }
-    ep->state = USBOTG_HS_EP_STATE_DATA_IN_WIP;
+    set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN_WIP);
 
     /* 2. Enable endpoint for transmission. */
     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
@@ -540,7 +541,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),1,USBOTG_HS_DOEPTSIZ_PKTCNT_Msk(ep_id),USBOTG_HS_DOEPTSIZ_PKTCNT_Pos(ep_id));
         set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),ep->mpsize,USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
     }
-    ep->state = USBOTG_HS_EP_STATE_DATA_OUT_WIP;
+    set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT_WIP);
 #endif
 
     /* Fragmentation on EP0 case: we don't loop on the input FIFO to
@@ -583,9 +584,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #endif
 
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-        ep->state = USBOTG_HS_EP_STATE_DATA_IN;
+        set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN);
 #else
-        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+        set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT);
 #endif
         /* write data from SRC to FIFO */
         errcode = usbotghs_write_epx_fifo(ep->mpsize, ep->id);
@@ -646,9 +647,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         if (residual_size == fifo_size) {
             /* last block, no more WIP */
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-            ep->state = USBOTG_HS_EP_STATE_DATA_IN;
+            set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN);
 #else
-            ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+            set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT);
 #endif
         }
 
@@ -694,9 +695,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         }
         /* last block, no more WIP */
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
-        ep->state = USBOTG_HS_EP_STATE_DATA_IN;
+        set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN);
 #else
-        ep->state = USBOTG_HS_EP_STATE_DATA_OUT;
+        set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT);
 #endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         log_printf("[USBOTGHS] write %d len data on ep %d core fifo\n", residual_size, ep->id);
@@ -715,7 +716,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 err:
     /* From whatever we come from to this point, the current transfer is complete
      * (with failure or not on upper level). IEPINT can inform the upper layer */
-    ep->state = USBOTG_HS_EP_STATE_IDLE;
+    set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_IDLE);
 err_init:
     return errcode;
 }
