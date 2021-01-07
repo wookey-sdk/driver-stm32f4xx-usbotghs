@@ -726,7 +726,7 @@ static mbed_error_t rxflvl_handler(void)
                     }
                     log_printf("[USB HS][RXFLVL] EP%d Global OUT NAK effective\n", epnum);
                     ctx->gonak_active = true;
-                    ctx->out_eps[epnum].state = USBOTG_HS_EP_STATE_IDLE;
+                    set_u8_with_membarrier(&ctx->out_eps[epnum].state, USBOTG_HS_EP_STATE_IDLE);
                     break;
                 }
             case PKT_STATUS_OUT_DATA_PKT_RECV:

@@ -257,7 +257,7 @@ mbed_error_t usbotghs_init_global_fifo(void)
     /* PTH: to check: executed at reset handling time: here we set back fifo_idx from
      * 0 as the device is reset. previously configured FIFO slots are purged and
      * must be reconfigured using usbotghs_reset_epx_fifo() */
-    ctx->fifo_idx = USBOTG_HS_RX_CORE_FIFO_SZ;
+    set_u16_with_membarrier(&ctx->fifo_idx, USBOTG_HS_RX_CORE_FIFO_SZ);
     /* setting TX0FSIZ to */
 
     return errcode;
@@ -331,7 +331,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
         set_reg(r_CORTEX_M_USBOTG_HS_DOEPCTL(0),
                 1, USBOTG_HS_DOEPCTL_CNAK);
         usbotghs_txfifo_flush(0);
-        ctx->fifo_idx += USBOTG_HS_TX_CORE_FIFO_SZ;
+        set_u16_with_membarrier(&ctx->fifo_idx, ctx->fifo_idx + USBOTG_HS_TX_CORE_FIFO_SZ);
     } else {
         /* all other EPs have their DIEPTXF registers accesible through a single macro */
         if (ep->dir == USBOTG_HS_EP_DIR_OUT) {
@@ -357,7 +357,7 @@ mbed_error_t usbotghs_reset_epx_fifo(usbotghs_ep_t *ep)
 
             /* FIXME: DIEPTXF fifo size is in word unit, shouldn't it be fifosize/4 ? */
             set_reg(r_CORTEX_M_USBOTG_HS_DIEPTXF(ep->id), fifosize, USBOTG_HS_DIEPTXF_INEPTXFD);
-            ctx->fifo_idx += fifosize;
+            set_u16_with_membarrier(&ctx->fifo_idx, ctx->fifo_idx + fifosize);
         }
     }
 
