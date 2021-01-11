@@ -431,7 +431,9 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVPARAM;
         goto err_init;
     }
+    /*@ assert ep_id <USBOTGHS_MAX_IN_EP; */
     ep = &ctx->in_eps[ep_id];
+    /* @ assert ep == &usbotghs_ctx.in_eps[ep_id] ; */
 #else
 
     if(ep_id >= USBOTGHS_MAX_OUT_EP)
@@ -439,40 +441,47 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         errcode = MBED_ERROR_INVPARAM;
         goto err_init
     }
+     /*@ assert ep_id <UYBOTGHS_MAX_OUT_EP; */
     ep = &ctx->out_eps[ep_id];
+    /* @ assert ep == &usbotghs_ctx.out_eps[ep_id] ; */
 #endif
 
-    /* @ assert ep == &usbotghs_ctx.in_eps[ep_id] ; */
+  
     if (src == NULL) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
+    /*@ assert src !=\null;*/ 
     if (size == 0) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
+    /*@ assert size !=0;*/ 
     if (ep->configured != true || ep->mpsize == 0) {
         log_printf("[USBOTG][HS] ep %d not configured\n", ep->id);
         errcode = MBED_ERROR_INVSTATE;
         goto err;
     }
-
+    /*@ assert ep->configured == true && ep->mpsize >0 ;*/ 
     fifo_size = USBOTG_HS_TX_CORE_FIFO_SZ;
 
     /* configure EP FIFO internal informations */
 
     if ((errcode = usbotghs_set_xmit_fifo(src, size, ep_id)) != MBED_ERROR_NONE) {
       log_printf("[USBOTG][HS] failed to set EP%d TxFIFO!\n", ep_id);
+      /*@ assert  errcode== MBED_ERROR_INVSTATE && \at(usbotghs_ctx.in_eps,Pre)[ep_id].fifo_lck == \true; */
       goto err_init;
     }
+ 
     /* giving these three assertions, next call to usbotghs_write_epx_fifo() should has its
      * preconditions granted. */
+    /* Here are the precodntions of a **valid** set_xmit_fifo() execution: */
+    /*@ assert \at(usbotghs_ctx.in_eps,Pre)[ep_id].fifo_lck == \false; */
     /* Here are the postconditions of a **valid** set_xmit_fifo() execution: */
     /*@ assert \valid(ep->fifo+(0..ep->fifo_size-1));*/
-    /*@ assert ep->fifo_size == size; */
-    /*@ assert ep->fifo_idx == 0; */
+    /*@ assert ep->fifo_lck == \false && ep->fifo == src && ep->fifo_idx==0 && ep->fifo_size==size; */
     /*@ assert ep->mpsize <= fifo_size; */
-    /*@ assert ep->fifo_lck == \false; */
+   
 
     /*
      * Here, we have to split the src content, taking into account the
@@ -602,7 +611,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /*@
       @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
       @ loop invariant fifo_size >0 ;
-      @ loop assigns  cpt,usbotghs_ctx.in_eps[ep_id].state, residual_size, *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,LoopEntry)];
+      @ loop assigns  errcode, cpt,usbotghs_ctx.in_eps[ep_id].state, residual_size, *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,LoopEntry)];
       @ loop variant residual_size ;
       */
     while (residual_size >= fifo_size) {
@@ -644,7 +653,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #endif
         }
 
-        /*@ assert \separated(&usbotghs_ctx,r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id),r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_DEVICE_FIFO(usbotghs_ctx.in_eps[ep_id].id), &num_ctx, &ctx_list+(..))  ; */
+        /* @ assert \separated(&usbotghs_ctx,r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id),r_CORTEX_M_USBOTG_HS_GINTMSK, USBOTG_HS_DEVICE_FIFO(usbotghs_ctx.in_eps[ep_id].id), &num_ctx, &ctx_list+(..))  ; */
         /* write data from SRC to FIFO */
         usbotghs_write_epx_fifo(fifo_size, ep->id);
 

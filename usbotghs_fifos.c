@@ -717,7 +717,7 @@ err:
     @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo);
     @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo_idx);
     @   assumes \valid(&usbotghs_ctx.in_eps[epid].fifo_size);
-    @   ensures \result == MBED_ERROR_NONE ;
+    @   ensures \result == MBED_ERROR_NONE && usbotghs_ctx.in_eps[epid].fifo == src && usbotghs_ctx.in_eps[epid].fifo_lck == \false && usbotghs_ctx.in_eps[epid].fifo_idx == 0 && usbotghs_ctx.in_eps[epid].fifo_size == size ;
     @   assigns usbotghs_ctx.in_eps[epid].fifo, usbotghs_ctx.in_eps[epid].fifo_lck, usbotghs_ctx.in_eps[epid].fifo_idx,usbotghs_ctx.in_eps[epid].fifo_size ;
 
     @ complete behaviors;

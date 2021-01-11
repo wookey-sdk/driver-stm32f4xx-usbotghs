@@ -26,10 +26,12 @@
 #include "libc/types.h"
 #include "libc/stdio.h"
 #include "libc/sync.h"
-#ifndef __FRAMAC__
+
 #include "libc/sanhandlers.h"
-#else
-#include "framac/entrypoint.h"
+
+
+#ifdef __FRAMAC__
+# include "framac/entrypoint.h"
 #endif
 
 #include "api/libusbotghs.h"
@@ -479,7 +481,7 @@ err:
  * IEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
+  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),   (usbctrl_context_t *)ctx_list + (0..1),&num_ctx);
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
   */
 static mbed_error_t iepint_handler(void)
@@ -501,10 +503,11 @@ static mbed_error_t iepint_handler(void)
         uint8_t ep_id = 0;
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_IN_EP;
-          @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].core_txfifo_empty,daint,errcode,diepintx;
+	  @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], daint,errcode,diepintx; 
           @ loop variant USBOTGHS_MAX_IN_EP - ep_id;
-          */
-        for (ep_id = 0; ep_id < USBOTGHS_MAX_IN_EP; ++ep_id) {
+	*/
+	// @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].core_txfifo_empty,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_idx,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_lck,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state, daint,errcode,diepintx;
+	for (ep_id = 0; ep_id < USBOTGHS_MAX_IN_EP; ++ep_id) {
             if (daint == 0) {
                 /* no more EPs to handle */
                 break;
@@ -515,6 +518,8 @@ static mbed_error_t iepint_handler(void)
                 /*
                  * Get back DIEPINTx for this EP
                  */
+		 /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+		/*@ assert 0<= ep_id < USBOTGHS_MAX_IN_EP ; */
                 diepintx = read_reg_value(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id));
 
                 /* Bit 7 TXFE: Transmit FIFO empty */
@@ -588,6 +593,7 @@ static mbed_error_t iepint_handler(void)
                                     datasize,
                                     USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
                                     USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
+			    /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
                             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
                                     USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
                             /* 2. write data to fifo */
@@ -601,6 +607,7 @@ static mbed_error_t iepint_handler(void)
                             if (ctx->in_eps[ep_id].handler == NULL) {
                                 goto err;
                             }
+			    /*@ assert ctx->in_eps[ep_id].handler != \null; */
 #ifndef __FRAMAC__
                             if (handler_sanity_check((physaddr_t)ctx->in_eps[ep_id].handler)) {
                                 goto err;

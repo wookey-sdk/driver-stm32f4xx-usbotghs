@@ -234,26 +234,28 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
  * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
 //    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (512 - 1))));
-
+//   @ assigns usbotghs_ctx.in_eps[ep_id].state,  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,Pre)];
+// @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
 /*@
     @ requires \separated(src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
-    @ assigns usbotghs_ctx.in_eps[ep_id].state,  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,Pre)];
-    @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
-
+  
     @ behavior bad_ep:
     @   assumes (ep_id >= USBOTGHS_MAX_IN_EP) ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
+    @   assigns \nothing;
 
     @ behavior bad_src:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
-    @   assumes src == NULL;
+    @   assumes src == \null;
     @   ensures \result == MBED_ERROR_INVPARAM;
+    @   assigns  usbotghs_ctx.in_eps[ep_id].state;
 
     @ behavior bad_size:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
-    @   assumes src != NULL;
+    @   assumes src != \null;
     @   assumes size == 0;
     @   ensures \result == MBED_ERROR_INVPARAM;
+    @   assigns  usbotghs_ctx.in_eps[ep_id].state;
 
     @ behavior not_configured:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
@@ -261,13 +263,25 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     @   assumes size > 0;
     @   assumes ((usbotghs_ctx.in_eps[ep_id].configured != \true) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
     @   ensures \result == MBED_ERROR_INVSTATE ;
+    @   assigns  usbotghs_ctx.in_eps[ep_id].state;
+
+    @ behavior locked:
+    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
+    @   assumes src != NULL;
+    @   assumes size > 0;
+    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \true) && (usbotghs_ctx.in_eps[ep_id].mpsize > 0));
+    @   assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
+    @   ensures \result == MBED_ERROR_INVSTATE  ;
+    @   assigns \nothing;
 
     @ behavior configured:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
     @   assumes src != NULL;
     @   assumes size > 0;
     @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \true) && (usbotghs_ctx.in_eps[ep_id].mpsize > 0));
+    @   assumes usbotghs_ctx.in_eps[ep_id].fifo_lck != \true;
     @   ensures \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE ;
+    @  @   assigns  usbotghs_ctx.in_eps[ep_id].fifo,usbotghs_ctx.in_eps[ep_id].fifo_lck,usbotghs_ctx.in_eps[ep_id].fifo_idx, usbotghs_ctx.in_eps[ep_id].fifo_size, *((uint32_t *)((0x40040000 + 0x910) + (int)ep_id * 0x20)), *((uint32_t *)((0x40040000 + 0x900) + (int)ep_id * 0x20)) , usbotghs_ctx.in_eps[ep_id].state;
 
     @ complete behaviors ;
     @ disjoint behaviors ;
