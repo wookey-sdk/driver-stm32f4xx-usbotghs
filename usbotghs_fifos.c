@@ -598,11 +598,30 @@ err:
  */
 
 /* ep check is done by calling functions */
+/*@
+
+  @ requires \separated(&GHOST_nopublicvar, &usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
+  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid].fifo, usbotghs_ctx.out_eps[epid].fifo_size, usbotghs_ctx.out_eps[epid].fifo_idx, usbotghs_ctx.out_eps[epid].fifo_lck;
+
+  // private function contract, depend on private globals state
+  @ ensures (\valid(dst) && epid < USBOTGHS_MAX_OUT_EP && (usbotghs_ctx.out_eps[epid].configured == \false || usbotghs_ctx.out_eps[epid].mpsize == 0)) ==> \result == MBED_ERROR_INVPARAM;
+
+  @ ensures (\valid(dst) && epid < USBOTGHS_MAX_OUT_EP && (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0) && size == 0) ==> \result == MBED_ERROR_INVPARAM;
+
+  @ ensures(\valid(dst) && epid < USBOTGHS_MAX_OUT_EP && (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0) && size > 0 && usbotghs_ctx.out_eps[epid].fifo_lck == \true) ==> \result == MBED_ERROR_INVSTATE;
+
+  @ ensures (\valid(dst) && epid < USBOTGHS_MAX_OUT_EP && (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0) && size > 0 && usbotghs_ctx.out_eps[epid].fifo_lck == \false) ==> \result == MBED_ERROR_NONE;
+
+  */
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {
     usbotghs_context_t *ctx = usbotghs_get_context();
     usbotghs_ep_t*      ep;
     mbed_error_t        errcode = MBED_ERROR_NONE;
+
+    /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
+     * specification for functions that assign private global content */
+    //@ ghost GHOST_nopublicvar = 1;
 
     if (dst == NULL) {
         errcode = MBED_ERROR_INVPARAM;

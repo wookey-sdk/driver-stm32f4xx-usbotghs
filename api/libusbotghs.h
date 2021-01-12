@@ -190,8 +190,7 @@ mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id);
  * Declaring the device against EwoK
  */
 /*@
-  @ requires \separated(&usbotghs_ctx);
-  @ assigns usbotghs_ctx.dev ;
+  @ assigns GHOST_nopublicvar;
   @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_UNKNOWN ;
   */
 mbed_error_t usbotghs_declare(void);
@@ -201,9 +200,7 @@ mbed_error_t usbotghs_declare(void);
  * have its USB control pipe ready to receive the first requests from the host.
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
-  @ assigns usbotghs_ctx \from indirect:mode;
-  @ assigns usbotghs_ctx,  *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+  @ assigns GHOST_nopublicvar;
   @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_INITFAIL
   || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_UNSUPORTED_CMD || \result == MBED_ERROR_NOMEM ;
   */
@@ -233,12 +230,10 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
  * @return MBED_ERROR_NONE if data has been correctly transmitted into the internal
  * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
-//    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (512 - 1))));
-//   @ assigns usbotghs_ctx.in_eps[ep_id].state,  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,Pre)];
-// @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
 /*@
-    @ requires \separated(src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
-  
+    @ assigns GHOST_nopublicvar;
+    @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
+
     @ behavior bad_ep:
     @   assumes (ep_id >= USBOTGHS_MAX_IN_EP) ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
@@ -248,40 +243,18 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
     @   assumes src == \null;
     @   ensures \result == MBED_ERROR_INVPARAM;
-    @   assigns  usbotghs_ctx.in_eps[ep_id].state;
 
     @ behavior bad_size:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
     @   assumes src != \null;
     @   assumes size == 0;
     @   ensures \result == MBED_ERROR_INVPARAM;
-    @   assigns  usbotghs_ctx.in_eps[ep_id].state;
 
-    @ behavior not_configured:
+    @ behavior input_ok:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
     @   assumes src != NULL;
     @   assumes size > 0;
-    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured != \true) || (usbotghs_ctx.in_eps[ep_id].mpsize == 0));
-    @   ensures \result == MBED_ERROR_INVSTATE ;
-    @   assigns  usbotghs_ctx.in_eps[ep_id].state;
-
-    @ behavior locked:
-    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
-    @   assumes src != NULL;
-    @   assumes size > 0;
-    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \true) && (usbotghs_ctx.in_eps[ep_id].mpsize > 0));
-    @   assumes usbotghs_ctx.in_eps[ep_id].fifo_lck == \true;
-    @   ensures \result == MBED_ERROR_INVSTATE  ;
-    @   assigns \nothing;
-
-    @ behavior configured:
-    @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;
-    @   assumes src != NULL;
-    @   assumes size > 0;
-    @   assumes ((usbotghs_ctx.in_eps[ep_id].configured == \true) && (usbotghs_ctx.in_eps[ep_id].mpsize > 0));
-    @   assumes usbotghs_ctx.in_eps[ep_id].fifo_lck != \true;
     @   ensures \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE ;
-    @  @   assigns  usbotghs_ctx.in_eps[ep_id].fifo,usbotghs_ctx.in_eps[ep_id].fifo_lck,usbotghs_ctx.in_eps[ep_id].fifo_idx, usbotghs_ctx.in_eps[ep_id].fifo_size, *((uint32_t *)((0x40040000 + 0x910) + (int)ep_id * 0x20)), *((uint32_t *)((0x40040000 + 0x900) + (int)ep_id * 0x20)) , usbotghs_ctx.in_eps[ep_id].state;
 
     @ complete behaviors ;
     @ disjoint behaviors ;
@@ -319,8 +292,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
 */
 
 /*@
-  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid].fifo, usbotghs_ctx.out_eps[epid].fifo_size, usbotghs_ctx.out_eps[epid].fifo_idx, usbotghs_ctx.out_eps[epid].fifo_lck;
+  @ assigns GHOST_nopublicvar;
   @ assigns \result \from indirect:epid, indirect:dst, indirect:size;
 
   @ behavior invdst:
@@ -332,34 +304,17 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
   @    assumes epid >= USBOTGHS_MAX_OUT_EP;
   @    ensures \result == MBED_ERROR_INVPARAM;
 
-  @ behavior epnotconfigured:
-  @    assumes \valid(dst);
-  @    assumes epid < USBOTGHS_MAX_OUT_EP;
-  @    assumes (usbotghs_ctx.out_eps[epid].configured == \false || usbotghs_ctx.out_eps[epid].mpsize == 0);
-  @    ensures \result == MBED_ERROR_INVPARAM;
-
   @ behavior badsize:
   @    assumes \valid(dst);
   @    assumes epid < USBOTGHS_MAX_OUT_EP;
-  @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
   @    assumes size == 0;
   @    ensures \result == MBED_ERROR_INVPARAM;
 
   @ behavior epfifolocked:
   @    assumes \valid(dst);
   @    assumes epid < USBOTGHS_MAX_OUT_EP;
-  @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
   @    assumes size > 0;
-  @    assumes usbotghs_ctx.out_eps[epid].fifo_lck == \true;
-  @    ensures \result == MBED_ERROR_INVSTATE;
-
-  @ behavior ok:
-  @    assumes \valid(dst);
-  @    assumes epid < USBOTGHS_MAX_OUT_EP;
-  @    assumes (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0);
-  @    assumes size > 0;
-  @    assumes usbotghs_ctx.out_eps[epid].fifo_lck == \false;
-  @    ensures \result == MBED_ERROR_NONE;
+  @    ensures (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_NONE);
 
   @ complete behaviors;
   @ disjoint behaviors;
@@ -370,25 +325,24 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
 /*
  * Send a special zero-length packet on EP ep
  */
- /*@
-   @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
-   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
-   @ assigns \result \from indirect:ep_id;
-   @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_IN_EP) ==> \result == MBED_ERROR_INVPARAM ;
-   @ ensures (!CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_OUT_EP) ==> \result == MBED_ERROR_INVPARAM ;
-   @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \false)
-   <==> \result == MBED_ERROR_INVSTATE ;
-   @ ensures (!CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_OUT_EP && usbotghs_ctx.out_eps[ep_id].configured == \false)
-   ==> \result == MBED_ERROR_INVSTATE ;
-   @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \true)
-   <==> \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE ;
-   @ ensures (!CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_OUT_EP && usbotghs_ctx.out_eps[ep_id].configured == \true)
-   ==> \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE ;
-   */
 /*
   spec ok with CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 1
   TODO : <==> to be prooved with CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 0
 */
+ /*@
+   @ assigns GHOST_nopublicvar;
+   @ assigns \result \from indirect:ep_id;
+
+   @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_IN_EP) ==> \result == MBED_ERROR_INVPARAM ;
+   @ ensures (!CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_OUT_EP) ==> \result == MBED_ERROR_INVPARAM ;
+
+   // public behaviors
+   @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_IN_EP)
+       <==> (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE);
+
+   @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id < USBOTGHS_MAX_OUT_EP)
+       <==> (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE);
+   */
 mbed_error_t usbotghs_send_zlp(uint8_t ep_id);
 
 /*
@@ -414,15 +368,14 @@ mbed_error_t usbotghs_global_stall_clear(void);
  * Set the STALL mode for the given EP
  */
 /*@
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @ assigns GHOST_nopublicvar;
   @ assigns \result \from indirect:ep_id, indirect:dir;
 
-  @ ensures (&usbotghs_ctx == \null) ==> (\result == MBED_ERROR_INVSTATE) ;
-  @ ensures ((&usbotghs_ctx == \null) && (dir == USBOTG_HS_EP_DIR_IN )) ==>
+  @ ensures (dir == USBOTG_HS_EP_DIR_IN ) ==>
   (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_NONE ||  \result == MBED_ERROR_BUSY ) ;
-  @ ensures ((&usbotghs_ctx == \null) && (dir == USBOTG_HS_EP_DIR_OUT )) ==>
+  @ ensures (dir == USBOTG_HS_EP_DIR_OUT ) ==>
   (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_NONE ||  \result == MBED_ERROR_BUSY ) ;
-  @ ensures ((&usbotghs_ctx == \null) && (dir != USBOTG_HS_EP_DIR_OUT ) && (dir != USBOTG_HS_EP_DIR_IN ) ) ==> (\result == MBED_ERROR_INVPARAM) ;
+  @ ensures ((dir != USBOTG_HS_EP_DIR_OUT ) && (dir != USBOTG_HS_EP_DIR_IN ) ) ==> (\result == MBED_ERROR_INVPARAM) ;
   */
 mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir);
 
@@ -436,11 +389,10 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir);
 mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir);
 
 /*@
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @ requires \separated(&GHOST_nopublicvar);
+  @ assigns GHOST_nopublicvar;
   @ assigns \result \from indirect:ep_id, indirect:dir;
-  @ ensures (&usbotghs_ctx == \null) ==> \result == MBED_ERROR_INVSTATE ;
-  @ ensures (&usbotghs_ctx != \null) ==> ( \result == MBED_ERROR_INVPARAM ||
-  \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_BUSY || \result ==MBED_ERROR_NONE  ) ;
+  @ ensures ( \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_BUSY || \result ==MBED_ERROR_NONE  ) ;
   */
 /*
 TODO : behavior spec (including __explicit_fallthrough)
@@ -448,59 +400,34 @@ TODO : behavior spec (including __explicit_fallthrough)
 mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
 
 /*@
-  @   requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
-  @   assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @   assigns GHOST_nopublicvar;
   @   assigns \result \from indirect:ep_id, indirect:dir;
 
-  @ behavior bad_ctx:
-  @   assumes &usbotghs_ctx == \null ;
-  @   ensures \result == MBED_ERROR_INVSTATE ;
-
   @ behavior dir_in_bad_epid:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes ep_id >= USBOTGHS_MAX_IN_EP ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
 
-  @ behavior dir_in_not_configured:
-  @   assumes &usbotghs_ctx != \null ;
-  @   assumes dir == USBOTG_HS_EP_DIR_IN ;
-  @   assumes ep_id < USBOTGHS_MAX_IN_EP ;
-  @   assumes usbotghs_ctx.in_eps[ep_id].configured == \false ;
-  @   ensures \result == MBED_ERROR_INVSTATE ;
-
-  @ behavior dir_in_configured_epid_0:
-  @   assumes &usbotghs_ctx != \null ;
-  @   assumes dir == USBOTG_HS_EP_DIR_IN ;
-  @   assumes ep_id < USBOTGHS_MAX_IN_EP ;
-  @   assumes usbotghs_ctx.in_eps[ep_id].configured == \true ;
-  @   assumes ep_id == 0 ;
-  @   ensures \result == MBED_ERROR_NONE ;
-
-  @ behavior dir_in_out_MBED_ERROR_INVPARAM:
-  @   assumes &usbotghs_ctx != \null ;
-  @   assumes ((dir == USBOTG_HS_EP_DIR_IN && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \true &&
-  ep_id != 0 && ep_id >= USBOTGHS_MAX_OUT_EP) || (dir == USBOTG_HS_EP_DIR_OUT && ep_id >= USBOTGHS_MAX_OUT_EP )) ;
+  @ behavior dir_out_bad_epid:
+  @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
+  @   assumes ep_id >= USBOTGHS_MAX_OUT_EP ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
-
-  @ behavior dir_in_out_MBED_ERROR_INVSTATE:
-  @   assumes &usbotghs_ctx != \null ;
-  @   assumes (dir == USBOTG_HS_EP_DIR_IN && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \true &&
-  ep_id != 0 && ep_id < USBOTGHS_MAX_OUT_EP && usbotghs_ctx.out_eps[ep_id].configured == \false) ||
-  ( dir == USBOTG_HS_EP_DIR_OUT && ep_id < USBOTGHS_MAX_OUT_EP && usbotghs_ctx.out_eps[ep_id].configured == \false ) ;
-  @   ensures \result == MBED_ERROR_INVSTATE ;
-
-  @ behavior dir_in_out_configured_MBED_ERROR_NONE:
-  @   assumes &usbotghs_ctx != \null ;
-  @   assumes (dir == USBOTG_HS_EP_DIR_IN && ep_id < USBOTGHS_MAX_IN_EP && usbotghs_ctx.in_eps[ep_id].configured == \true &&
-  ep_id != 0 && ep_id < USBOTGHS_MAX_OUT_EP && usbotghs_ctx.out_eps[ep_id].configured == \true) ||
-  ( dir == USBOTG_HS_EP_DIR_OUT && ep_id < USBOTGHS_MAX_OUT_EP && usbotghs_ctx.out_eps[ep_id].configured == \true ) ;
-  @   ensures \result == MBED_ERROR_NONE ;
 
   @ behavior other_dir:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
+
+  // here the input ep_id value is valid from the HW point of vue but may not be configured in the local
+  // intefaces configuration state (INVSTATE)
+  @ behavior dir_in_valid_ep:
+  @   assumes dir == USBOTG_HS_EP_DIR_IN ;
+  @   assumes ep_id < USBOTGHS_MAX_IN_EP ;
+  @   ensures (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE);
+
+  @ behavior dir_out_valid_ep:
+  @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
+  @   assumes ep_id < USBOTGHS_MAX_OUT_EP ;
+  @   ensures (\result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_NONE);
 
   @ complete behaviors;
   @ disjoint behaviors;
@@ -511,8 +438,7 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
  * Activate the given EP (for e.g. to transmit data)
  */
 /*@
-  @ requires \separated(&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)], usbotghs_ctx, usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)] ;
+  @   assigns GHOST_nopublicvar;
   @ assigns \result \from indirect:ep, indirect:dir;
 
   @ behavior invmpsize:
@@ -574,9 +500,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
  * Deactivate the given EP (Its configuration is keeped, the EP is *not* deconfigured)
  */
 /*@
-  @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-  // @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+  @ assigns GHOST_nopublicvar;
   @ assigns \result \from indirect:ep;
 
   @ behavior badep:
@@ -585,7 +509,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
 
   @ behavior ok:
   @    assumes ep < USBOTGHS_MAX_IN_EP;
-  @    ensures \result == MBED_ERROR_NONE;
+  @    ensures (\result == MBED_ERROR_NONE || \result == MBED_ERROR_INVPARAM);
 
   @ complete behaviors ;
   @ disjoint behaviors ;
@@ -597,42 +521,29 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
  * Configure the given EP in order to be ready to work
  */
 /*@
-  @  assigns *(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)) ;
-  @  assigns *(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)) ;
+  @ assigns GHOST_nopublicvar;
   @ assigns \result \from indirect:ep_id, indirect:dir;
 
-  @ behavior badctx:
-  @    assumes &usbotghs_ctx == \null ;
-  @    ensures r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id) == \old(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)) ;
-  @    ensures r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id) == \old(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)) ;
-  @    ensures \result == MBED_ERROR_INVSTATE ;
-
-
   @ behavior dir_in_bad_ep_id:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes ep_id >= USBOTGHS_MAX_IN_EP ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
 
   @ behavior dir_out_bad_ep_id:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
   @   assumes ep_id >= USBOTGHS_MAX_OUT_EP ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
 
   @ behavior other_dir:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN ;
   @   ensures \result == MBED_ERROR_INVPARAM ;
 
   @ behavior dir_in_ok:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes ep_id < USBOTGHS_MAX_IN_EP ;
   @   ensures \result == MBED_ERROR_NONE ;
 
   @ behavior dir_out_ok:
-  @   assumes &usbotghs_ctx != \null ;
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
   @   assumes ep_id < USBOTGHS_MAX_OUT_EP ;
   @   ensures \result == MBED_ERROR_NONE ;
@@ -651,8 +562,7 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               ep_id,
  * Reset frame reception to reconfigure the Core in a known clear state.
  */
 /*@
-    @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns GHOST_nopublicvar;
     @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
@@ -681,8 +591,7 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep_id,
  * nor receive data (including IN Token or OUT handshakes)
  */
 /*@
-    @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns GHOST_nopublicvar;
     @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
@@ -712,8 +621,7 @@ mbed_error_t usbotghs_endpoint_disable(uint8_t               ep_id,
  * Reenable Endpoint previously disabled
  */
 /*@
-    @ requires \separated(&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+    @ assigns GHOST_nopublicvar;
     @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
@@ -742,7 +650,7 @@ mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
  * @addr: Device's address
  */
 /*@
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
+  @ assigns GHOST_nopublicvar;
   */
 void usbotghs_set_address(uint16_t addr);
 
@@ -766,12 +674,12 @@ void usbotghs_unbind(void);
   @ behavior DIR_IN:
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes epnum < USBOTGHS_MAX_IN_EP ;
-  @   ensures \result == usbotghs_ctx.in_eps[epnum].state ;
+  @   ensures is_valid_ep_state(\result);
 
   @ behavior DIR_OUT:
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
   @   assumes epnum < USBOTGHS_MAX_OUT_EP ;
-  @   ensures \result == usbotghs_ctx.out_eps[epnum].state ;
+  @   ensures is_valid_ep_state(\result);
 
   @ behavior other_dir:
   @   assumes (dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN) ;
