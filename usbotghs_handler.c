@@ -424,7 +424,7 @@ static mbed_error_t oepint_handler(void)
                 }
                 if (callback_to_call == true) {
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
-		    
+
 		    if (ctx->out_eps[ep_id].handler == NULL) {
                         goto err;
                     }
@@ -506,7 +506,7 @@ static mbed_error_t iepint_handler(void)
         uint8_t ep_id = 0;
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_IN_EP;
-	  @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], daint,errcode,diepintx; 
+	  @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], daint,errcode,diepintx;
           @ loop variant USBOTGHS_MAX_IN_EP - ep_id;
 	*/
 	// @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].core_txfifo_empty,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_idx,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_lck,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state, daint,errcode,diepintx;
@@ -568,7 +568,7 @@ static mbed_error_t iepint_handler(void)
                 if (diepintx & USBOTG_HS_DIEPINT_XFRC_Msk) {
 		   /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
 		  set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPINT(ep_id), USBOTG_HS_DIEPINT_XFRC_Msk);
-		  
+
 		  log_printf("[USBOTG][HS] iepint: ep %d: transfert completed\n", ep_id);
 
                     /* inform upper layer only on end of effetvive transfer. A transfer may be
@@ -606,7 +606,7 @@ static mbed_error_t iepint_handler(void)
                             set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
                             /* inform libctrl of transfert complete */
 
-			   
+
                             if (ctx->in_eps[ep_id].handler == NULL) {
                                 goto err;
                             }
@@ -911,12 +911,15 @@ static mbed_error_t esuspend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
+    usbctrl_handle_earlysuspend(usb_otg_hs_dev_infos.id);
+
     return errcode;
 }
 
 /*
  * USB suspend handler. Received when there is no activity on the data
- * lines (including EP0) for a period of 3ms.
+ * lines (including EP0) for a period of 3ms after an early suspend event.
+ * The device should enter SUSPEND state
  */
 /*@
   @ assigns \nothing;
@@ -924,11 +927,29 @@ static mbed_error_t esuspend_handler(void)
 static mbed_error_t ususpend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
+    /* we must inform the control layer that we should enter suspend state as
+     * no event has been received on USB. */
+    usbctrl_handle_usbsuspend(usb_otg_hs_dev_infos.id);
 
     return errcode;
 }
 
+/*
+ * USB resume/wakeup handler. Received when the host restart its activity
+ * after a suspension (see ususpend).
+ */
+/*@
+  @ assigns \nothing;
+  */
+static mbed_error_t resume_handler(void)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    /* we must inform the control layer that we should enter suspend state as
+     * no event has been received on USB. */
+    usbctrl_handle_wakeup(usb_otg_hs_dev_infos.id);
 
+    return errcode;
+}
 
 
 /************************************************
@@ -972,7 +993,7 @@ static const usb_otg_hs_isr_handler_t usb_otg_hs_isr_handlers[32] = {
     default_handler,    /*< Connector ID status change */
     default_handler,    /*< Disconnect event (Host mode) */
     default_handler,    /*< Session request/new session event*/
-    default_handler,    /*< Resume/Wakeup event */
+    resume_handler,    /*< Resume/Wakeup event */
 };
 
 /************************************************
