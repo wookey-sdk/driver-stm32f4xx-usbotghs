@@ -344,7 +344,8 @@ mbed_error_t usbotghs_initialize_device(void)
         		 USBOTG_HS_GINTMSK_USBRST_Msk   |
                  USBOTG_HS_GINTMSK_ENUMDNEM_Msk |
                  USBOTG_HS_GINTMSK_ESUSPM_Msk   |
-                 USBOTG_HS_GINTMSK_USBSUSPM_Msk);
+                 USBOTG_HS_GINTMSK_USBSUSPM_Msk |
+                 USBOTG_HS_GINTMSK_WUIM_Msk);
 
     log_printf("[USB HS] dev init: unmask the global interrupt msk\n");
     set_reg(r_CORTEX_M_USBOTG_HS_GAHBCFG, 1, USBOTG_HS_GAHBCFG_GINTMSK);
