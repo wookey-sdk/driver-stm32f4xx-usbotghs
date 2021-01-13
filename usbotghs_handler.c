@@ -357,8 +357,8 @@ err:
  * OEPINNT is executed when the TxFIFO has been flushed by the core and content sent
  */
 /*@
-    @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
-    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
+    @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
+    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
 static mbed_error_t oepint_handler(void)
 {
@@ -375,7 +375,7 @@ static mbed_error_t oepint_handler(void)
         log_printf("[USBOTG][HS] handling received data\n");
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_OUT_EP;
-          @ loop assigns errcode, daint, ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].fifo_idx , *(register_t)((0x40040000 + 0xb08) + (int) (0 .. USBOTGHS_MAX_OUT_EP) * 0x20), *(register_t)((0x40040000 + 0xb00)  + (int) (0 .. USBOTGHS_MAX_OUT_EP) * 0x20) ,*r_CORTEX_M_USBOTG_HS_GINTMSK ;
+          @ loop assigns errcode, daint, ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state,  GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].fifo_idx , *(register_t)((0x40040000 + 0xb08) + (int) (0 .. USBOTGHS_MAX_OUT_EP) * 0x20), *(register_t)((0x40040000 + 0xb00)  + (int) (0 .. USBOTGHS_MAX_OUT_EP) * 0x20) ,*r_CORTEX_M_USBOTG_HS_GINTMSK ;
           @ loop variant USBOTGHS_MAX_OUT_EP - ep_id;
           */
         for (ep_id = 0; ep_id < USBOTGHS_MAX_OUT_EP; ++ep_id) {
@@ -448,6 +448,7 @@ static mbed_error_t oepint_handler(void)
                 /* XXX: only if SNAK set */
                 /* now that data has been handled, consider FIFO as empty */
                 set_u8_with_membarrier(&(ctx->out_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
+                //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
             }
             daint >>= 1;
         }
@@ -466,6 +467,7 @@ static mbed_error_t oepint_handler(void)
                 /* calling upper handler, transmitted size read from DOEPSTS */
                 errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
                 set_u32_with_membarrier(&(ctx->out_eps[ep_id].state), USBOTG_HS_EP_STATE_IDLE);
+                //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
             }
             ep_id++;
             val = val << 1;
@@ -484,8 +486,8 @@ err:
  * IEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),   (usbctrl_context_t *)ctx_list + (0..1),&num_ctx);
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
+  @ requires \separated(GHOST_in_eps + (0 .. USBOTGHS_MAX_IN_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),   (usbctrl_context_t *)ctx_list + (0..1),&num_ctx);
+  @ assigns GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP - 1].state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
   */
 static mbed_error_t iepint_handler(void)
 {
@@ -506,10 +508,11 @@ static mbed_error_t iepint_handler(void)
         uint8_t ep_id = 0;
         /*@
           @ loop invariant 0 <= ep_id <= USBOTGHS_MAX_IN_EP;
-	  @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], daint,errcode,diepintx;
+	  @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], daint,errcode,diepintx,GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP - 1].state;
           @ loop variant USBOTGHS_MAX_IN_EP - ep_id;
 	*/
-	// @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].core_txfifo_empty,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_idx,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_lck,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state, daint,errcode,diepintx;
+
+	// @ loop assigns ep_id, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].core_txfifo_empty,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_idx,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo_lck,usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].fifo, GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state, daint,errcode,diepintx;
 	for (ep_id = 0; ep_id < USBOTGHS_MAX_IN_EP; ++ep_id) {
             if (daint == 0) {
                 /* no more EPs to handle */
@@ -604,6 +607,7 @@ static mbed_error_t iepint_handler(void)
                         } else {
                             /* now EP is idle */
                             set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
+                            //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
                             /* inform libctrl of transfert complete */
 
 
@@ -630,6 +634,7 @@ static mbed_error_t iepint_handler(void)
                          * that the FIFO content is effectively sent */
                         /* clear current FIFO, now that content is sent */
                         set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
+                        //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
                     }
                 }
                 /* now that transmit is complete, set ep state as IDLE */
@@ -651,6 +656,7 @@ static mbed_error_t iepint_handler(void)
                 /* calling upper handler */
                 errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                 set_u32_with_membarrier(&(ctx->in_eps[ep_id].state), USBOTG_HS_EP_STATE_IDLE);
+                        //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
             }
             ep_id++;
             val = val << 1;
@@ -669,8 +675,8 @@ err:
  * As a consequence, we only defines the memory separation contsraints and the worst impact (globals updates) of the function.
  */
 /*@
-  @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
-  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
+  @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
+  @ assigns GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP - 1].state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
   */
 static mbed_error_t rxflvl_handler(void)
 {
@@ -749,6 +755,7 @@ static mbed_error_t rxflvl_handler(void)
                     log_printf("[USB HS][RXFLVL] EP%d Global OUT NAK effective\n", epnum);
                     ctx->gonak_active = true;
                     set_u8_with_membarrier(&ctx->out_eps[epnum].state, USBOTG_HS_EP_STATE_IDLE);
+                    //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                     break;
                 }
             case PKT_STATUS_OUT_DATA_PKT_RECV:
@@ -786,6 +793,7 @@ static mbed_error_t rxflvl_handler(void)
                         usbotghs_endpoint_stall(epnum, USBOTG_HS_EP_DIR_OUT);
                     }
                     set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_DATA_OUT_WIP);
+                    //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                     if (epnum == USBOTG_HS_EP0) {
                         if (ctx->out_eps[epnum].fifo_idx < ctx->out_eps[epnum].fifo_size) {
                             /* rise oepint to permit refragmentation at oepint layer */
@@ -807,6 +815,7 @@ static mbed_error_t rxflvl_handler(void)
                         goto err;
                     }
                     set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_DATA_OUT);
+                    //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                     break;
                 }
             case PKT_STATUS_SETUP_TRANS_COMPLETE:
@@ -818,6 +827,7 @@ static mbed_error_t rxflvl_handler(void)
                     }
                     /* setup transfer complete, no wait oepint to handle this */
                     set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_SETUP);
+                    //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                     break;
                 }
             case PKT_STATUS_SETUP_PKT_RECEIVED:
@@ -850,6 +860,7 @@ static mbed_error_t rxflvl_handler(void)
                     /* After this, the Data stage begins. A Setup stage done should be received, which triggers
                      * a Setup interrupt */
                     set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_SETUP_WIP);
+                    //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                     break;
                 }
             default:

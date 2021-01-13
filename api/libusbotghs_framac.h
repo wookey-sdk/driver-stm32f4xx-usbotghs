@@ -73,6 +73,17 @@
   s == USBOTG_HS_EP_STATE_INVALID;
 */
 
+struct ep_public_info_t {
+    usbotghs_ep_state_t state;
+};
+
+/* Logic states of all IN and OUT endpoints. Kept synchronous with driver internal state handling */
+/*@
+  @ ghost
+     struct ep_public_info_t GHOST_in_eps[USBOTGHS_MAX_IN_EP] = { 0 };
+     struct ep_public_info_t GHOST_out_eps[USBOTGHS_MAX_OUT_EP] = { 0 };
+ */
+
 
 #include "libusbctrl.h"
 

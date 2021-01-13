@@ -200,7 +200,9 @@ mbed_error_t usbotghs_declare(void);
  * have its USB control pipe ready to receive the first requests from the host.
  */
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP-1),GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1));
+  @ assigns GHOST_in_eps[0].state;
+  @ assigns GHOST_out_eps[0].state;
   @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_INITFAIL
   || \result == MBED_ERROR_BUSY || \result == MBED_ERROR_UNSUPORTED_CMD || \result == MBED_ERROR_NOMEM ;
   */
@@ -231,7 +233,8 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
  * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
 /*@
-    @ assigns GHOST_nopublicvar;
+    @ requires \separated(src,GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1));
+    @ assigns GHOST_in_eps[ep_id].state;
     @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
 
     @ behavior bad_ep:
@@ -438,7 +441,8 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
  * Activate the given EP (for e.g. to transmit data)
  */
 /*@
-  @   assigns GHOST_nopublicvar;
+  @ assigns GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP - 1].state;
+  @ assigns GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP - 1].state;
   @ assigns \result \from indirect:ep, indirect:dir;
 
   @ behavior invmpsize:
@@ -675,11 +679,13 @@ void usbotghs_unbind(void);
   @   assumes dir == USBOTG_HS_EP_DIR_IN ;
   @   assumes epnum < USBOTGHS_MAX_IN_EP ;
   @   ensures is_valid_ep_state(\result);
+  @   ensures \result == GHOST_in_eps[epnum].state;
 
   @ behavior DIR_OUT:
   @   assumes dir == USBOTG_HS_EP_DIR_OUT ;
   @   assumes epnum < USBOTGHS_MAX_OUT_EP ;
   @   ensures is_valid_ep_state(\result);
+  @   ensures \result == GHOST_out_eps[epnum].state;
 
   @ behavior other_dir:
   @   assumes (dir != USBOTG_HS_EP_DIR_OUT && dir != USBOTG_HS_EP_DIR_IN) ;

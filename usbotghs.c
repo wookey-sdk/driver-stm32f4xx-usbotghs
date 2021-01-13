@@ -303,7 +303,7 @@ mbed_error_t usbotghs_declare(void)
  */
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP-1), GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),&GHOST_nopublicvar, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns usbotghs_ctx \from indirect:mode;
   @ assigns usbotghs_ctx,  *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
   */
@@ -372,6 +372,8 @@ reset ? */
     usbotghs_ctx.in_eps[0].mpsize = USBOTG_HS_EPx_MPSIZE_64BYTES;
     usbotghs_ctx.in_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.in_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    //@ ghost GHOST_in_eps[0].state = usbotghs_ctx.in_eps[0].state;
+    //@ assert GHOST_in_eps[0].state == usbotghs_ctx.in_eps[0].state;
     usbotghs_ctx.in_eps[0].handler = ieph;
     usbotghs_ctx.in_eps[0].fifo = NULL; /* not yet configured */
     usbotghs_ctx.in_eps[0].fifo_idx = 0; /* not yet configured */
@@ -387,6 +389,8 @@ reset ? */
     usbotghs_ctx.out_eps[0].mpsize = USBOTG_HS_EPx_MPSIZE_64BYTES;
     usbotghs_ctx.out_eps[0].type = USBOTG_HS_EP_TYPE_CONTROL;
     usbotghs_ctx.out_eps[0].state = USBOTG_HS_EP_STATE_IDLE;
+    //@ ghost GHOST_out_eps[0].state = usbotghs_ctx.out_eps[0].state;
+    //@ assert GHOST_out_eps[0].state == usbotghs_ctx.out_eps[0].state;
     usbotghs_ctx.out_eps[0].handler = oeph;
     usbotghs_ctx.out_eps[0].dir = USBOTG_HS_EP_DIR_OUT;
     usbotghs_ctx.out_eps[0].fifo = 0; /* not yet configured */
@@ -429,7 +433,7 @@ TODO : add specification for !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
 */
 
 /*@
- @ requires \separated(&GHOST_nopublicvar, src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+ @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1),&GHOST_nopublicvar, src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
 
  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (512 - 1))));
  @ assigns usbotghs_ctx.in_eps[ep_id].state,  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,Pre)];
@@ -559,6 +563,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),ep->mpsize,USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id), USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
     }
     set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN_WIP);
+    //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
 
     /* 2. Enable endpoint for transmission. */
     set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
@@ -576,6 +581,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         set_reg_value(r_CORTEX_M_USBOTG_HS_DOEPTSIZ(ep_id),ep->mpsize,USBOTG_HS_DOEPTSIZ_XFRSIZ_Msk(ep_id),USBOTG_HS_DOEPTSIZ_XFRSIZ_Pos(ep_id));
     }
     set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT_WIP);
+    //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
 #endif
 
     /* Fragmentation on EP0 case: we don't loop on the input FIFO to
@@ -619,8 +625,10 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN);
+    //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
 #else
         set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT);
+    //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
 #endif
         /* write data from SRC to FIFO */
         errcode = usbotghs_write_epx_fifo(ep->mpsize, ep->id);
@@ -682,8 +690,10 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
             /* last block, no more WIP */
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
             set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN);
+            //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
 #else
             set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT);
+            //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
 #endif
         }
 
@@ -730,8 +740,10 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         /* last block, no more WIP */
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
         set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_IN);
+            //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
 #else
         set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_DATA_OUT);
+            //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
 #endif
         /* set the EP state to DATA OUT WIP (not yet transmitted) */
         log_printf("[USBOTGHS] write %d len data on ep %d core fifo\n", residual_size, ep->id);
@@ -751,6 +763,11 @@ err:
     /* From whatever we come from to this point, the current transfer is complete
      * (with failure or not on upper level). IEPINT can inform the upper layer */
     set_u8_with_membarrier(&ep->state, USBOTG_HS_EP_STATE_IDLE);
+#if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
+    //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
+#else
+    //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
+#endif
 err_init:
     return errcode;
 }
@@ -1130,7 +1147,7 @@ mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir)
  * FIFO informations)
  */
 /*@
-  @ requires \separated(&GHOST_nopublicvar,&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1), GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1), &GHOST_nopublicvar,&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)], usbotghs_ctx, usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)] ;
 
   */
@@ -1169,6 +1186,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->in_eps[ep].mpsize = mpsize;
             ctx->in_eps[ep].type = type;
             ctx->in_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
+            //@ ghost GHOST_in_eps[ep].state = usbotghs_ctx.in_eps[ep].state;
             ctx->in_eps[ep].handler = handler;
             if (ep < USBOTGHS_MAX_OUT_EP) {
                 ctx->out_eps[ep].configured = false;
@@ -1207,6 +1225,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->out_eps[ep].mpsize = mpsize;
             ctx->out_eps[ep].type = type;
             ctx->out_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
+            //@ ghost GHOST_out_eps[ep].state = usbotghs_ctx.out_eps[ep].state;
             ctx->out_eps[ep].handler = handler;
             if (ep < USBOTGHS_MAX_IN_EP) {
                 ctx->in_eps[ep].configured = false;
@@ -1246,6 +1265,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->out_eps[ep].mpsize = mpsize;
             ctx->out_eps[ep].type = type;
             ctx->out_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
+            //@ ghost GHOST_out_eps[ep].state = usbotghs_ctx.out_eps[ep].state;
             ctx->out_eps[ep].handler = handler;
 
             ctx->in_eps[ep].id = ep;
@@ -1254,6 +1274,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
             ctx->in_eps[ep].mpsize = mpsize;
             ctx->in_eps[ep].type = type;
             ctx->in_eps[ep].state = USBOTG_HS_EP_STATE_IDLE;
+            //@ ghost GHOST_in_eps[ep].state = usbotghs_ctx.in_eps[ep].state;
             ctx->in_eps[ep].handler = handler;
 
             /* Maximum packet size */
@@ -1572,8 +1593,10 @@ void usbotghs_set_address(uint16_t addr)
 
   // private function contract
   @ ensures ( dir == USBOTG_HS_EP_DIR_IN && epnum < USBOTGHS_MAX_IN_EP) ==> \result == usbotghs_ctx.in_eps[epnum].state ;
+  @ ensures ( dir == USBOTG_HS_EP_DIR_IN && epnum < USBOTGHS_MAX_IN_EP) ==> \result == GHOST_in_eps[epnum].state ;
 
   @ ensures ( dir == USBOTG_HS_EP_DIR_OUT && epnum < USBOTGHS_MAX_OUT_EP) ==> \result == usbotghs_ctx.out_eps[epnum].state ;
+  @ ensures ( dir == USBOTG_HS_EP_DIR_OUT && epnum < USBOTGHS_MAX_OUT_EP) ==> \result == GHOST_out_eps[epnum].state ;
 
  */
 usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir)
