@@ -57,7 +57,7 @@
 #define USBOTG_HS_TX_CORE_FIFO_SZ 512 /* 128 bytes, unit is 32bits DWORD here */
 
 
-//@ ghost uint32_t GHOST_nopublicvar = 0;
+//@ ghost uint32_t GHOST_opaque_drv_privates = 0;
 
 
 /*@ predicate is_valid_ep_state(usbotghs_ep_state_t s) =

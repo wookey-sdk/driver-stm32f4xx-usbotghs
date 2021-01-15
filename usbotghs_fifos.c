@@ -600,7 +600,7 @@ err:
 /* ep check is done by calling functions */
 /*@
 
-  @ requires \separated(&GHOST_nopublicvar, &usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
+  @ requires \separated(&GHOST_opaque_drv_privates, &usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), dst + (0..size-1));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.out_eps[epid].fifo, usbotghs_ctx.out_eps[epid].fifo_size, usbotghs_ctx.out_eps[epid].fifo_idx, usbotghs_ctx.out_eps[epid].fifo_lck;
 
   // private function contract, depend on private globals state
@@ -621,7 +621,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     if (dst == NULL) {
         errcode = MBED_ERROR_INVPARAM;

@@ -190,7 +190,7 @@ mbed_error_t usbctrl_handle_wakeup(uint32_t dev_id);
  * Declaring the device against EwoK
  */
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ assigns GHOST_opaque_drv_privates;
   @ ensures \result == MBED_ERROR_NONE || \result == MBED_ERROR_UNKNOWN ;
   */
 mbed_error_t usbotghs_declare(void);
@@ -295,7 +295,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id);
 */
 
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ assigns GHOST_opaque_drv_privates;
   @ assigns \result \from indirect:epid, indirect:dst, indirect:size;
 
   @ behavior invdst:
@@ -333,7 +333,7 @@ mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid);
   TODO : <==> to be prooved with CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE == 0
 */
  /*@
-   @ assigns GHOST_nopublicvar;
+   @ assigns GHOST_opaque_drv_privates;
    @ assigns \result \from indirect:ep_id;
 
    @ ensures (CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE && ep_id >= USBOTGHS_MAX_IN_EP) ==> \result == MBED_ERROR_INVPARAM ;
@@ -371,7 +371,7 @@ mbed_error_t usbotghs_global_stall_clear(void);
  * Set the STALL mode for the given EP
  */
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ assigns GHOST_opaque_drv_privates;
   @ assigns \result \from indirect:ep_id, indirect:dir;
 
   @ ensures (dir == USBOTG_HS_EP_DIR_IN ) ==>
@@ -392,8 +392,8 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir);
 mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir);
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar);
-  @ assigns GHOST_nopublicvar;
+  @ requires \separated(&GHOST_opaque_drv_privates);
+  @ assigns GHOST_opaque_drv_privates;
   @ assigns \result \from indirect:ep_id, indirect:dir;
   @ ensures ( \result == MBED_ERROR_INVPARAM || \result == MBED_ERROR_INVSTATE || \result == MBED_ERROR_BUSY || \result ==MBED_ERROR_NONE  ) ;
   */
@@ -403,7 +403,7 @@ TODO : behavior spec (including __explicit_fallthrough)
 mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir);
 
 /*@
-  @   assigns GHOST_nopublicvar;
+  @   assigns GHOST_opaque_drv_privates;
   @   assigns \result \from indirect:ep_id, indirect:dir;
 
   @ behavior dir_in_bad_epid:
@@ -504,7 +504,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t               ep,
  * Deactivate the given EP (Its configuration is keeped, the EP is *not* deconfigured)
  */
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ assigns GHOST_opaque_drv_privates;
   @ assigns \result \from indirect:ep;
 
   @ behavior badep:
@@ -525,7 +525,7 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep);
  * Configure the given EP in order to be ready to work
  */
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ assigns GHOST_opaque_drv_privates;
   @ assigns \result \from indirect:ep_id, indirect:dir;
 
   @ behavior dir_in_bad_ep_id:
@@ -566,7 +566,7 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               ep_id,
  * Reset frame reception to reconfigure the Core in a known clear state.
  */
 /*@
-    @ assigns GHOST_nopublicvar;
+    @ assigns GHOST_opaque_drv_privates;
     @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
@@ -595,7 +595,7 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep_id,
  * nor receive data (including IN Token or OUT handshakes)
  */
 /*@
-    @ assigns GHOST_nopublicvar;
+    @ assigns GHOST_opaque_drv_privates;
     @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
@@ -625,7 +625,7 @@ mbed_error_t usbotghs_endpoint_disable(uint8_t               ep_id,
  * Reenable Endpoint previously disabled
  */
 /*@
-    @ assigns GHOST_nopublicvar;
+    @ assigns GHOST_opaque_drv_privates;
     @ assigns \result \from indirect:ep_id, indirect:dir;
 
     @ behavior invalid_dir:
@@ -654,7 +654,7 @@ mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
  * @addr: Device's address
  */
 /*@
-  @ assigns GHOST_nopublicvar;
+  @ assigns GHOST_opaque_drv_privates;
   */
 void usbotghs_set_address(uint16_t addr);
 

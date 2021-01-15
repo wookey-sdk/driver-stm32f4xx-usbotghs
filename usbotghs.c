@@ -94,7 +94,7 @@ usbotghs_context_t *usbotghs_get_context(void)
 
 /* TODO : memset & memcpy with framac */
 /*@
-  @ requires \separated(&GHOST_nopublicvar, &usbotghs_ctx);
+  @ requires \separated(&GHOST_opaque_drv_privates, &usbotghs_ctx);
   @ assigns usbotghs_ctx.dev ;
   */
 mbed_error_t usbotghs_declare(void)
@@ -102,7 +102,7 @@ mbed_error_t usbotghs_declare(void)
     e_syscall_ret ret = 0;
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     log_printf("[USBOTG][HS] Declaring device\n");
 
@@ -303,7 +303,7 @@ mbed_error_t usbotghs_declare(void)
  */
 
 /*@
-  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP-1), GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),&GHOST_nopublicvar, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP-1), GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),&GHOST_opaque_drv_privates, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns usbotghs_ctx \from indirect:mode;
   @ assigns usbotghs_ctx,  *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
   */
@@ -314,7 +314,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     /* First, reset the PHY device connected to the core through ULPI interface */
     log_printf("[USB HS] Mapping device\n");
@@ -433,7 +433,7 @@ TODO : add specification for !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
 */
 
 /*@
- @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1),&GHOST_nopublicvar, src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+ @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1),&GHOST_opaque_drv_privates, src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
 
  @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (512 - 1))));
  @ assigns usbotghs_ctx.in_eps[ep_id].state,  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,Pre)];
@@ -453,7 +453,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 {
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     uint32_t packet_count = 0;
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -778,7 +778,7 @@ err_init:
  */
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
+  @ requires \separated(&GHOST_opaque_drv_privates, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
    @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
 
 
@@ -800,7 +800,7 @@ mbed_error_t usbotghs_send_zlp(uint8_t ep_id)
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
     if (ep_id >= USBOTGHS_MAX_IN_EP) {
@@ -867,7 +867,7 @@ mbed_error_t usbotghs_global_stall(void)
 }
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
   */
 mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
@@ -878,7 +878,7 @@ mbed_error_t usbotghs_endpoint_set_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     /*
      * FIXME: For IN endpoint, implicit fallthrough to IN+OUT NAK
@@ -958,7 +958,7 @@ err:
 
 /*@
   @ // specification private part: local globals constraints (usbotghs is a library)
-  @   requires \separated(&GHOST_nopublicvar, &usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
+  @   requires \separated(&GHOST_opaque_drv_privates, &usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ) ;
   @   assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
 
 
@@ -975,7 +975,7 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
 
     usbotghs_context_t *ctx = usbotghs_get_context();
@@ -1046,7 +1046,7 @@ mbed_error_t usbotghs_global_stall_clear(void)
  * Set the STALL mode for the given EP. This mode has priority on the global STALL mode
  */
 /*@
-  @ requires \separated(&GHOST_nopublicvar, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
  */
 mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
@@ -1057,7 +1057,7 @@ mbed_error_t usbotghs_endpoint_stall(uint8_t ep_id, usbotghs_ep_dir_t dir)
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     /* sanitize */
     switch (dir) {
@@ -1147,7 +1147,7 @@ mbed_error_t usbotghs_endpoint_stall_clear(uint8_t ep, usbotghs_ep_dir_t dir)
  * FIFO informations)
  */
 /*@
-  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1), GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1), &GHOST_nopublicvar,&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1), GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1), &GHOST_opaque_drv_privates,&usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)], &usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)],((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0..(USBOTGHS_MAX_IN_EP-1)], usbotghs_ctx, usbotghs_ctx.out_eps[0..(USBOTGHS_MAX_OUT_EP-1)] ;
 
   */
@@ -1162,7 +1162,7 @@ mbed_error_t usbotghs_configure_endpoint(uint8_t                 ep,
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     log_printf("[USBOTGHS] configure EP %d: dir %d, mpsize %d, type %x\n", ep, dir, mpsize, type);
     usbotghs_context_t *ctx = usbotghs_get_context();
@@ -1323,7 +1323,7 @@ err:
  */
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar, &usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates, &usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
 
   //@ ensures ((ep < USBOTGHS_MAX_IN_EP) && (ep >= USBOTGHS_MAX_OUT_EP) && (usbotghs_ctx.in_eps[ep].configured == \true)) ==> \result == MBED_ERROR_NONE;
@@ -1338,7 +1338,7 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     /*@ assert ctx == &usbotghs_ctx; */
 
@@ -1381,7 +1381,7 @@ mbed_error_t usbotghs_deconfigure_endpoint(uint8_t ep)
  * hold by the libUSBCtrl
  */
 /*@
-  @  requires \separated(&GHOST_nopublicvar,r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id));
+  @  requires \separated(&GHOST_opaque_drv_privates,r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id));
   @  assigns *(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)) ;
   @  assigns *(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)) ;
  */
@@ -1392,7 +1392,7 @@ mbed_error_t usbotghs_activate_endpoint(uint8_t               ep_id,
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     switch (dir) {
         case USBOTG_HS_EP_DIR_IN:
@@ -1421,7 +1421,7 @@ err:
 }
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar,&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates,&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
   */
 mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep_id,
@@ -1431,7 +1431,7 @@ mbed_error_t usbotghs_deactivate_endpoint(uint8_t ep_id,
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     /* sanitize */
     if (dir != USBOTG_HS_EP_DIR_IN && dir != USBOTG_HS_EP_DIR_OUT) {
@@ -1477,7 +1477,7 @@ err:
 /* disable (temporary) a given Endpoint (no more data is received or sent) */
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar,&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates,&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
  */
 mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
@@ -1488,7 +1488,7 @@ mbed_error_t usbotghs_endpoint_disable(uint8_t ep_id,
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
 
     log_printf("[USBOTGHS] disable EP %d: dir %d\n", ep_id, dir);
@@ -1527,7 +1527,7 @@ err:
 
 /* enable a previously disabled Endpoint */
 /*@
-  @ requires \separated(&GHOST_nopublicvar,&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates,&usbotghs_ctx,((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
  */
 mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
@@ -1538,7 +1538,7 @@ mbed_error_t usbotghs_endpoint_enable(uint8_t ep_id,
 
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
 
     log_printf("[USBOTGHS] enable EP %d: dir %d\n", ep_id, dir);
@@ -1577,14 +1577,14 @@ err:
 }
 
 /*@
-  @ requires \separated(&GHOST_nopublicvar, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
+  @ requires \separated(&GHOST_opaque_drv_privates, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)) ;
   */
 void usbotghs_set_address(uint16_t addr)
 {
     /* no public (exported) variable is set. This GHOST var is used as countermeasure to public assignment
      * specification for functions that assign private global content */
-    //@ ghost GHOST_nopublicvar = 1;
+    //@ ghost GHOST_opaque_drv_privates = 1;
 
     set_reg(r_CORTEX_M_USBOTG_HS_DCFG, addr, USBOTG_HS_DCFG_DAD);
 }
