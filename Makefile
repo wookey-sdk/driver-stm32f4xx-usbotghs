@@ -144,8 +144,8 @@ JOBS        := $(shell nproc)
 TIMEOUT     := 15
 
 FRAMAC_GEN_FLAGS:=\
-			-absolute-valid-range 0x40040000-0x40080000 \
-			-no-frama-c-stdlib \
+		-absolute-valid-range 0x40040000-0x40080000 \
+		-no-frama-c-stdlib \
 	        -warn-left-shift-negative \
 	        -warn-right-shift-negative \
 	        -warn-signed-downcast \

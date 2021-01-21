@@ -51,6 +51,16 @@
 
 #define MAX_EP_HW 4
 
+#else
+/***************************************************************
+ * FramaC: private: about registers
+ */
+
+# define r_CORTEX_M_USBOTG_HS_DIEPCTL(EP)    REG_ADDR(USB_OTG_HS_BASE + 0x900 + ((EP) * 0x20))
+# define r_CORTEX_M_USBOTG_HS_DOEPCTL(EP)    REG_ADDR(USB_OTG_HS_BASE + 0xb00 + ((EP) * 0x20))
+
+/* private predicates */
+
 #endif
 
 #define CPT_HARD 100
@@ -69,7 +79,6 @@
  * Driver private structures and types
  */
 
-#ifndef __FRAMAC__
 typedef enum {
     USBOTG_HS_SPEED_LS = 0, /* aka Low speed (USB 1.0) */
     USBOTG_HS_SPEED_FS = 1, /* aka Full Speed (USB 1.1) */
@@ -107,9 +116,13 @@ typedef struct {
     uint8_t             speed;        /* device enumerated speed, default HS */
 } usbotghs_context_t;
 
+#ifdef __FRAMAC__
+/* export to framaC entrypoint */
+usbotghs_context_t usbotghs_ctx = { 0 };
+#endif/*!__FRAMAC__*/
+
 
 usbotghs_context_t *usbotghs_get_context(void);
 
-#endif
 
 #endif /*!USBOTGHS_H_ */

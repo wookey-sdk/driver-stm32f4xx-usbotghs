@@ -57,56 +57,32 @@
 #define USBOTG_HS_TX_CORE_FIFO_SZ 512 /* 128 bytes, unit is 32bits DWORD here */
 
 
-/* FramaC specific header, needed in order to expose ACSL anotations in the API file,
- * allowing the usage of composition for upper layers, using use-specs for this very
- * module */
-typedef enum {
-    USBOTG_HS_SPEED_LS = 0, /* aka Low speed (USB 1.0) */
-    USBOTG_HS_SPEED_FS = 1, /* aka Full Speed (USB 1.1) */
-    USBOTG_HS_SPEED_HS = 2, /* aka High speed (USB 2.0) */
-} usbotghs_speed_t;
+//@ ghost uint32_t GHOST_opaque_drv_privates = 0;
 
-/*
- * local context hold by the driver
+
+/*@ predicate is_valid_ep_state(usbotghs_ep_state_t s) =
+  s == USBOTG_HS_EP_STATE_IDLE ||
+  s == USBOTG_HS_EP_STATE_SETUP_WIP ||
+  s == USBOTG_HS_EP_STATE_SETUP ||
+  s == USBOTG_HS_EP_STATE_STATUS ||
+  s == USBOTG_HS_EP_STATE_STALL ||
+  s == USBOTG_HS_EP_STATE_DATA_IN_WIP ||
+  s == USBOTG_HS_EP_STATE_DATA_IN ||
+  s == USBOTG_HS_EP_STATE_DATA_OUT_WIP ||
+  s == USBOTG_HS_EP_STATE_DATA_OUT ||
+  s == USBOTG_HS_EP_STATE_INVALID;
+*/
+
+struct ep_public_info_t {
+    usbotghs_ep_state_t state;
+};
+
+/* Logic states of all IN and OUT endpoints. Kept synchronous with driver internal state handling */
+/*@
+  @ ghost
+     struct ep_public_info_t GHOST_in_eps[USBOTGHS_MAX_IN_EP] = { 0 };
+     struct ep_public_info_t GHOST_out_eps[USBOTGHS_MAX_OUT_EP] = { 0 };
  */
-typedef struct {
-    uint8_t                      id;           /* EP id (libusbctrl view) */
-    bool                         configured;   /* is EP configured in current configuration ? */
-    uint16_t                     mpsize;       /* max packet size (bitfield, 11 bits, in bytes) */
-    uint8_t                      type;         /* EP type */
-    uint8_t             state;        /* EP current state */
-    usbotghs_ep_dir_t   dir;
-    usbotghs_ioep_handler_t      handler;      /* EP Handler for (I|O)EPEVENT */
-
-    uint8_t            *fifo;         /* associated RAM FIFO (recv) */
-    uint32_t            fifo_idx;     /* current FIFO index  (recv) */
-    uint32_t            fifo_size;    /* associated RAM FIFO max size (recv) */
-    bool                fifo_lck;     /* DMA, locking mechanism (recv) */
-    bool                core_txfifo_empty; /* core TxFIFO (Half) empty */
-} usbotghs_ep_t;
-
-typedef struct {
-    device_t            dev;             /* associated device_t structure */
-    int                 dev_desc;        /* device descriptor */
-    usbotghs_dev_mode_t mode;            /* current OTG mode (host or device) */
-    bool                gonak_req;       /* global OUT NAK requested */
-    bool                gonak_active;    /* global OUT NAK effective */
-    uint16_t            fifo_idx;        /* consumed Core FIFO */
-    usbotghs_ep_t       in_eps[USBOTGHS_MAX_IN_EP];       /* list of HW supported IN EPs */
-    usbotghs_ep_t       out_eps[USBOTGHS_MAX_OUT_EP];      /* list of HW supported OUT EPs */
-    uint8_t             speed;        /* device enumerated speed, default HS */
-} usbotghs_context_t;
-
-usbotghs_context_t usbotghs_ctx = { 0 };
-
-usbotghs_context_t *usbotghs_get_context(void);
-
-/***************************************************************
- * about registers
- */
-
-# define r_CORTEX_M_USBOTG_HS_DIEPCTL(EP)    REG_ADDR(USB_OTG_HS_BASE + 0x900 + ((EP) * 0x20))
-# define r_CORTEX_M_USBOTG_HS_DOEPCTL(EP)    REG_ADDR(USB_OTG_HS_BASE + 0xb00 + ((EP) * 0x20))
 
 
 #include "libusbctrl.h"
