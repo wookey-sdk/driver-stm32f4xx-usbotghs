@@ -538,7 +538,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
      */
     packet_count = (size / ep->mpsize) + ((size % ep->mpsize) ? 1: 0);
 
-    printf("[USBOTG][HS] need to write %d pkt on ep %d, total size: %d\n", packet_count, ep_id, size);
+    log_printf("[USBOTG][HS] need to write %d pkt on ep %d, total size: %d\n", packet_count, ep_id, size);
 #if CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
     /* 1. Program the OTG_HS_DIEPTSIZx register for the transfer size
      * and the corresponding packet count. */
@@ -550,7 +550,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id), packet_count, USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id), USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),size,USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
     } else {
-        printf("[USBOTG][HS] need to write more data than the EP is able in a single transfer\n");
+        log_printf("[USBOTG][HS] need to write more data than the EP is able in a single transfer\n");
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),1,USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
         set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),ep->mpsize,USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id), USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
     }
@@ -572,7 +572,7 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
      * not finished) */
 
     if (ep_id == 0 && size > ep->mpsize) {
-        printf("[USBOTG][HS] fragment: initiate the first fragment to send (MPSize) on EP0\n");
+        log_printf("[USBOTG][HS] fragment: initiate the first fragment to send (MPSize) on EP0\n");
         /* wait for enough space in TxFIFO */
 
 #ifndef __FRAMAC__

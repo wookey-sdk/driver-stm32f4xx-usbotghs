@@ -580,7 +580,7 @@ static mbed_error_t iepint_handler(void)
                     if (ctx->in_eps[ep_id].state == USBOTG_HS_EP_STATE_DATA_IN) {
                         if (ctx->in_eps[ep_id].fifo_idx < ctx->in_eps[ep_id].fifo_size) {
 
-                            printf("[USBOTG][HS] iepint: ep %d: still in fragmented transfer (%d on %d), continue...\n", ep_id, ctx->in_eps[ep_id].fifo_idx, ctx->in_eps[ep_id].fifo_size);
+                            log_printf("[USBOTG][HS] iepint: ep %d: still in fragmented transfer (%d on %d), continue...\n", ep_id, ctx->in_eps[ep_id].fifo_idx, ctx->in_eps[ep_id].fifo_size);
                             /* still in fragmentation transfer. We need to start a new
                              * transmission of the bigger size between mpsize and residual size
                              * in order to finish the current transfer. The EP state is untouched */
