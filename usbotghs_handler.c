@@ -414,13 +414,14 @@ static mbed_error_t oepint_handler(void)
                     /* XXX: defragmentation need to be checked for others (not EP0) EPs */
                     /* always handle defragmentation on EP0 */
                     if (ctx->out_eps[ep_id].fifo_idx < ctx->out_eps[ep_id].fifo_size) {
-                        if (ctx->out_eps[ep_id].state == USBOTG_HS_EP_STATE_DATA_OUT_WIP) {
+                        if (ctx->out_eps[ep_id].state == USBOTG_HS_EP_STATE_DATA_OUT) {
+                            /* BULK endpoint specific, handle variable length data stage */
+                            callback_to_call = true;
+                        } else {
                             /* handle defragmentation for DATA OUT packets on EP0 */
                             log_printf("[USBOTG][HS] fragment pkt %d total, %d read\n", ctx->out_eps[ep_id].fifo_size, ctx->out_eps[ep_id].fifo_idx);
                             /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
                             set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
-                        } else {
-                            callback_to_call = true;
                         }
                     } else {
                         /* FIFO full */
@@ -785,15 +786,19 @@ static mbed_error_t rxflvl_handler(void)
                         }
                     }
 check_variable_length_transfer:
-                    /* handling variable length transfert. When receiving ZLP after mpsize multiple data OR
+                    /* handling variable length transfert (for BULK only, see chap. 5.8.3)
+                     * When receiving ZLP after mpsize multiple data OR
                      * receiving data smaller than MPSize, this means that this is the last DATA packet (see
                      * Data variable length transaction, USB 2.0 std protocol).
                      * We consider variable length data transfer not supported on EP0 */
                     if ((bcnt < ctx->out_eps[epnum].mpsize) ||
                             (bcnt == 0 && ctx->out_eps[epnum].fifo_idx >= ctx->out_eps[epnum].mpsize))
                     {
-                        set_u8_with_membarrier(&ctx->out_eps[epnum].state, USBOTG_HS_EP_STATE_DATA_OUT);
-                        //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
+                        /* only for BULK endpoints, says the USB standard */
+                        if (ctx->out_eps[epnum].type == USBOTG_HS_EP_TYPE_BULK) {
+                            set_u8_with_membarrier(&ctx->out_eps[epnum].state, USBOTG_HS_EP_STATE_DATA_OUT);
+                            //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
+                        }
                     }
                     goto err;
                     break;
