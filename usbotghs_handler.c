@@ -796,7 +796,7 @@ check_variable_length_transfer:
                             (bcnt == 0 && ctx->out_eps[epnum].fifo_idx >= ctx->out_eps[epnum].mpsize))
                     {
                         /* only for BULK endpoints, says the USB standard */
-                        if (ctx->out_eps[epnum].type == USBOTG_HS_EP_TYPE_BULK) {
+                        if (ctx->out_eps[epnum].type != USBOTG_HS_EP_TYPE_ISOCHRONOUS) {
                             set_u8_with_membarrier(&ctx->out_eps[epnum].state, USBOTG_HS_EP_STATE_DATA_OUT);
                             //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                         }
