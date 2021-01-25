@@ -426,6 +426,7 @@ static mbed_error_t oepint_handler(void)
                     } else {
                         /* FIFO full */
                         log_printf("[USBOTG][HS] oepint for %d data size read\n", ctx->out_eps[ep_id].fifo_idx);
+                        set_u8_with_membarrier(&ctx->out_eps[ep_id].state, USBOTG_HS_EP_STATE_DATA_OUT);
                         callback_to_call = true;
                     }
                 }
