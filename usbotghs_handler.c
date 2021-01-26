@@ -399,8 +399,8 @@ static mbed_error_t oepint_handler(void)
                 /* Bit 0 XFRC: Data received complete */
                 if (doepint & USBOTG_HS_DOEPINT_XFRC_Msk) {
                     log_printf("[USBOTG][HS] oepint: entering XFRC\n");
-		    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
-		    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
+                    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPINT(ep_id), USBOTG_HS_DOEPINT_XFRC_Msk);
                     if (ctx->out_eps[ep_id].fifo_idx == 0) {
                         /* ZLP transfer initialited from the HOST */
                         continue;
@@ -409,23 +409,31 @@ static mbed_error_t oepint_handler(void)
                     /* Here we set SNAK bit to avoid receiving data before the next read cmd config.
                      * If not, a race condition can happen, if RXFLVL handler is executed *before* the EP
                      * RxFIFO is set by the upper layer */
-		    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
-		   set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
+                    /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+                    set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_SNAK_Msk);
                     /* XXX: defragmentation need to be checked for others (not EP0) EPs */
+                    /* always handle defragmentation on EP0 */
                     if (ctx->out_eps[ep_id].fifo_idx < ctx->out_eps[ep_id].fifo_size) {
-                        /* handle defragmentation for DATA OUT packets on EP0 */
-                        log_printf("[USBOTG][HS] fragment pkt %d total, %d read\n", ctx->out_eps[ep_id].fifo_size, ctx->out_eps[ep_id].fifo_idx);
-			/* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
-                        set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                        if (ctx->out_eps[ep_id].state == USBOTG_HS_EP_STATE_DATA_OUT) {
+                            /* BULK endpoint specific, handle variable length data stage */
+                            callback_to_call = true;
+                        } else {
+                            /* handle defragmentation for DATA OUT packets on EP0 */
+                            log_printf("[USBOTG][HS] fragment pkt %d total, %d read\n", ctx->out_eps[ep_id].fifo_size, ctx->out_eps[ep_id].fifo_idx);
+                            /* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+                            set_reg_bits(r_CORTEX_M_USBOTG_HS_DOEPCTL(ep_id), USBOTG_HS_DOEPCTL_CNAK_Msk);
+                        }
                     } else {
+                        /* FIFO full */
                         log_printf("[USBOTG][HS] oepint for %d data size read\n", ctx->out_eps[ep_id].fifo_idx);
+                        set_u8_with_membarrier(&ctx->out_eps[ep_id].state, USBOTG_HS_EP_STATE_DATA_OUT);
                         callback_to_call = true;
                     }
                 }
                 if (callback_to_call == true) {
                     log_printf("[USBOTG][HS] oepint: calling callback\n");
 
-		    if (ctx->out_eps[ep_id].handler == NULL) {
+                    if (ctx->out_eps[ep_id].handler == NULL) {
                         goto err;
                     }
 #ifndef __FRAMAC__
@@ -455,23 +463,7 @@ static mbed_error_t oepint_handler(void)
 	/* @ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_GINTMSK  <=  (register_t) USB_BACKEND_MEMORY_END; */
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_OEPINT);
 #else
-        /* TODO: (FIXME host mode not working yet) here, this is a 'end of transmission' interrupt. Let's handle each
-         * endpoint for which the interrupt rised */
-        uint16_t val = 0x1;
-        uint8_t ep_id = 0;
-        for (uint8_t i = 0; i < 16; ++i) {
-            if (daint & val) {
-                /* an iepint for this EP is active */
-                log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
-                /* now that transmit is complete, set ep state as IDLE */
-                /* calling upper handler, transmitted size read from DOEPSTS */
-                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->out_eps[ep_id].fifo_idx, ep_id);
-                set_u32_with_membarrier(&(ctx->out_eps[ep_id].state), USBOTG_HS_EP_STATE_IDLE);
-                //@ ghost GHOST_out_eps[ep_id].state = usbotghs_ctx.out_eps[ep_id].state;
-            }
-            ep_id++;
-            val = val << 1;
-        }
+# error "not yet supported!"
 #endif
 err:
     return errcode;
@@ -590,8 +582,8 @@ static mbed_error_t iepint_handler(void)
                             if (datasize > ctx->in_eps[ep_id].mpsize) {
                                 datasize = ctx->in_eps[ep_id].mpsize;
                             }
-			    /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
-			    set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
+                            /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+                            set_reg_value(r_CORTEX_M_USBOTG_HS_DIEPTSIZ(ep_id),
                                     1,
                                     USBOTG_HS_DIEPTSIZ_PKTCNT_Msk(ep_id),
                                     USBOTG_HS_DIEPTSIZ_PKTCNT_Pos(ep_id));
@@ -599,11 +591,11 @@ static mbed_error_t iepint_handler(void)
                                     datasize,
                                     USBOTG_HS_DIEPTSIZ_XFRSIZ_Msk(ep_id),
                                     USBOTG_HS_DIEPTSIZ_XFRSIZ_Pos(ep_id));
-			    /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
+                            /*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id)  <=  (register_t) USB_BACKEND_MEMORY_END; */
                             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id),
                                     USBOTG_HS_DIEPCTL_CNAK_Msk | USBOTG_HS_DIEPCTL_EPENA_Msk);
                             /* 2. write data to fifo */
-                            usbotghs_write_epx_fifo(ctx->in_eps[ep_id].mpsize, ep_id);
+                            usbotghs_write_epx_fifo(datasize, ep_id);
                         } else {
                             /* now EP is idle */
                             set_u8_with_membarrier(&(ctx->in_eps[ep_id].state), (uint8_t)USBOTG_HS_EP_STATE_IDLE);
@@ -614,16 +606,16 @@ static mbed_error_t iepint_handler(void)
                             if (ctx->in_eps[ep_id].handler == NULL) {
                                 goto err;
                             }
-			    /*@ assert ctx->in_eps[ep_id].handler != \null; */
+                            /*@ assert ctx->in_eps[ep_id].handler != \null; */
 #ifndef __FRAMAC__
                             if (handler_sanity_check((physaddr_t)ctx->in_eps[ep_id].handler)) {
                                 goto err;
                             }
 #endif
-			    /*@ assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
+                            /*@ assert ctx->in_eps[ep_id].handler \in { &handler_ep}; */
                             /*@ calls  handler_ep; */
                             /* In FramaC context, upper handler is my_handle_inepevent */
-			    errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
+                            errcode = ctx->in_eps[ep_id].handler(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
                             ctx->in_eps[ep_id].fifo = 0;
                             ctx->in_eps[ep_id].fifo_idx = 0;
                             ctx->in_eps[ep_id].fifo_size = 0;
@@ -645,22 +637,7 @@ static mbed_error_t iepint_handler(void)
 	/*@ assert  (register_t) USB_BACKEND_MEMORY_BASE <=r_CORTEX_M_USBOTG_HS_GINTMSK  <=  (register_t) USB_BACKEND_MEMORY_END; */
         set_reg(r_CORTEX_M_USBOTG_HS_GINTMSK, 1, USBOTG_HS_GINTMSK_IEPINT);
 #else
-        /* here, this is a 'data received' interrupt  (Host mode) */
-        diepintx = 0;
-        uint16_t val = 0x1;
-        uint8_t ep_id = 0;
-        for (uint8_t i = 0; i < 16; ++i) {
-            if (daint & val) {
-                /* an iepint for this EP is active */
-                log_printf("[USBOTG][HS] iepint: ep %d\n", ep_id);
-                /* calling upper handler */
-                errcode = usbctrl_handle_outepevent(usb_otg_hs_dev_infos.id, ctx->in_eps[ep_id].fifo_idx, ep_id);
-                set_u32_with_membarrier(&(ctx->in_eps[ep_id].state), USBOTG_HS_EP_STATE_IDLE);
-                        //@ ghost GHOST_in_eps[ep_id].state = usbotghs_ctx.in_eps[ep_id].state;
-            }
-            ep_id++;
-            val = val << 1;
-        }
+# error "not yet supported!"
 #endif
     /* calling upper handler... needed ? */
 err:
@@ -761,6 +738,8 @@ static mbed_error_t rxflvl_handler(void)
             case PKT_STATUS_OUT_DATA_PKT_RECV:
                 {
                     log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT (size %d) Recv\n", epnum, bcnt);
+
+                    /* error cases first */
                     if (ctx->out_eps[epnum].configured != true)
                     {
                         log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT on invalid EP!\n", epnum);
@@ -781,9 +760,13 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
+
+
+                    /* if bcnt == 0, nothing to read from the FIFO */
                     if (bcnt == 0) {
-                        goto err;
+                        goto check_variable_length_transfer;
                     }
+
                     log_printf("[USB HS][RXFLVL] EP%d OUT Data PKT (size %d) Read EPx FIFO\n", epnum, bcnt);
 
                     /*@ assert usbotghs_ctx.out_eps[epnum].configured == \true; */
@@ -803,6 +786,22 @@ static mbed_error_t rxflvl_handler(void)
                             usbotghs_endpoint_set_nak(epnum, USBOTG_HS_EP_DIR_OUT);
                         }
                     }
+check_variable_length_transfer:
+                    /* handling variable length transfert (for BULK only, see chap. 5.8.3)
+                     * When receiving ZLP after mpsize multiple data OR
+                     * receiving data smaller than MPSize, this means that this is the last DATA packet (see
+                     * Data variable length transaction, USB 2.0 std protocol).
+                     * We consider variable length data transfer not supported on EP0 */
+                    if ((bcnt < ctx->out_eps[epnum].mpsize) ||
+                            (bcnt == 0 && ctx->out_eps[epnum].fifo_idx >= ctx->out_eps[epnum].mpsize))
+                    {
+                        /* only for BULK endpoints, says the USB standard */
+                        if (ctx->out_eps[epnum].type != USBOTG_HS_EP_TYPE_ISOCHRONOUS) {
+                            set_u8_with_membarrier(&ctx->out_eps[epnum].state, USBOTG_HS_EP_STATE_DATA_OUT);
+                            //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
+                        }
+                    }
+                    goto err;
                     break;
                 }
             case PKT_STATUS_OUT_TRANSFER_COMPLETE:
@@ -814,7 +813,7 @@ static mbed_error_t rxflvl_handler(void)
                         errcode = MBED_ERROR_INVSTATE;
                         goto err;
                     }
-                    set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_DATA_OUT);
+                    //set_u8_with_membarrier(&(ctx->out_eps[epnum].state), (uint8_t)USBOTG_HS_EP_STATE_DATA_OUT);
                     //@ ghost GHOST_out_eps[epnum].state = usbotghs_ctx.out_eps[epnum].state;
                     break;
                 }
