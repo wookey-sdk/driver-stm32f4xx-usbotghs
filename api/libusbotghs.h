@@ -128,7 +128,6 @@ typedef enum {
     USBOTG_HS_EP_DIR_BOTH,
 } usbotghs_ep_dir_t;
 
-
 /*********************************************************************************
  * About handlers
  *
@@ -697,7 +696,12 @@ void usbotghs_unbind(void);
 */
 usbotghs_ep_state_t usbotghs_get_ep_state(uint8_t epnum, usbotghs_ep_dir_t dir);
 
-uint16_t usbotghs_get_ep_mpsize(void);
+/*@
+  @ assigns \nothing;
+  @ ensures (type == USBOTG_HS_EP_TYPE_CONTROL) ==> \result == 64 ;
+  @ ensures (type != USBOTG_HS_EP_TYPE_CONTROL) ==> \result == 512 ;
+  */
+uint16_t usbotghs_get_ep_mpsize(usbotghs_ep_type_t type);
 
 /*@
   @ assigns \nothing ;

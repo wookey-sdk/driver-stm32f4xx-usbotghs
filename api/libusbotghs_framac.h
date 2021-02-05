@@ -46,6 +46,10 @@
 #define USBOTGHS_MAX_IN_EP   6 /* EP0 + 5 IN EPs */
 #define USBOTGHS_MAX_OUT_EP  6 /* EP0 + 5 OUT EPs */
 
+/* abstraction layer */
+#define USB_BACKEND_DRV_MAX_IN_EP USBOTGHS_MAX_IN_EP
+#define USB_BACKEND_DRV_MAX_OUT_EP USBOTGHS_MAX_OUT_EP
+
 /* is the following useless ?*/
 #define MAX_EP_HW 6
 

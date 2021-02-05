@@ -23,7 +23,7 @@ APP_BUILD_DIR = $(BUILD_DIR)/drivers/$(LIB_NAME)
 ###################################################################
 
 CFLAGS += $(DRIVERS_CFLAGS)
-CFLAGS += -MMD -MP -O3
+CFLAGS += -MMD -MP -Os
 
 #############################################################
 # About driver sources

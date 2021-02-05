@@ -409,14 +409,13 @@ err:
  * supported
  */
 
-/*@
-  @ assigns \nothing;
-  @ ensures \result == MAX_EPx_PKT_SIZE ;
-  */
-
-uint16_t usbotghs_get_ep_mpsize(void)
+uint16_t usbotghs_get_ep_mpsize(usbotghs_ep_type_t type)
 {
-    return MAX_EPx_PKT_SIZE;
+    if (type == USBOTG_HS_EP_TYPE_CONTROL) {
+        return 64;
+    } else {
+        return 512;
+    }
 }
 
 
@@ -1660,7 +1659,7 @@ mbed_error_t usb_backend_drv_endpoint_disable(uint8_t ep_id, usb_backend_drv_ep_
 mbed_error_t usb_backend_drv_endpoint_enable(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
     __attribute__ ((alias("usbotghs_endpoint_enable")));
 
-uint16_t usb_backend_get_ep_mpsize(void) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
+uint16_t usb_backend_get_ep_mpsize(usb_backend_drv_ep_type_t type) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
 usb_backend_drv_port_speed_t usb_backend_drv_get_speed(void) __attribute__ ((alias("usbotghs_get_speed")));
 
 
