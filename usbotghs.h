@@ -59,6 +59,9 @@
 # define r_CORTEX_M_USBOTG_HS_DIEPCTL(EP)    REG_ADDR(USB_OTG_HS_BASE + 0x900 + ((EP) * 0x20))
 # define r_CORTEX_M_USBOTG_HS_DOEPCTL(EP)    REG_ADDR(USB_OTG_HS_BASE + 0xb00 + ((EP) * 0x20))
 
+#define USB_BACKEND_MEMORY_BASE 0x50000000
+#define USB_BACKEND_MEMORY_END  0x50044000
+
 /* private predicates */
 
 #endif
