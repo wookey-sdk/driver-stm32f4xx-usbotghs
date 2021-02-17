@@ -175,11 +175,22 @@ FRAMAC_EVA_FLAGS:=\
             -metrics \
 			-metrics-eva-cover *.c
 
+ifeq (22,$(FRAMAC_VERSION))
+FRAMAC_WP_SUPP_FLAGS=
+else
+FRAMAC_WP_SUPP_FLAGS=
+endif
+
+FRAMAC_WP_PROVERS ?= alt-ergo,cvc4,z3
+
+
+
 FRAMAC_WP_FLAGS:=\
-	        -wp \
+	    -wp \
 		-wp-model "Typed+ref+int" \
+		$(FRAMAC_WP_SUPP_FLAGS)\
 		-wp-literals \
-		-wp-prover alt-ergo,cvc4,z3 \
+		-wp-prover $(FRAMAC_WP_PROVERS) \
 		-wp-timeout $(TIMEOUT) \
 		-wp-smoke-tests \
 		-wp-no-smoke-dead-code \
