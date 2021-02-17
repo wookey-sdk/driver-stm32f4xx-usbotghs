@@ -981,12 +981,7 @@ mbed_error_t usbotghs_endpoint_clear_nak(uint8_t ep_id, usbotghs_ep_dir_t dir)
                 goto err;
             }
             set_reg_bits(r_CORTEX_M_USBOTG_HS_DIEPCTL(ep_id), USBOTG_HS_DIEPCTL_CNAK_Msk);
-            if (ep_id == 0) {
-                break;
-            }
-            /* FIXME: this seems to be a functional bug in upper layer(s): clear nak on invalid direction */
-            /* TODO: to be investigate in order to set break here */
-            __explicit_fallthrough
+            break;
         case USBOTG_HS_EP_DIR_OUT:
                 log_printf("[USBOTG][HS] CNAK on OUT ep %d\n", ep_id);
                 if (ep_id >= USBOTGHS_MAX_OUT_EP) {
@@ -1659,7 +1654,7 @@ mbed_error_t usb_backend_drv_endpoint_disable(uint8_t ep_id, usb_backend_drv_ep_
 mbed_error_t usb_backend_drv_endpoint_enable(uint8_t ep_id, usb_backend_drv_ep_dir_t dir)
     __attribute__ ((alias("usbotghs_endpoint_enable")));
 
-uint16_t usb_backend_get_ep_mpsize(usb_backend_drv_ep_type_t type) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
+uint16_t usb_backend_drv_get_ep_mpsize(usb_backend_drv_ep_type_t type) __attribute__ ((alias("usbotghs_get_ep_mpsize")));
 usb_backend_drv_port_speed_t usb_backend_drv_get_speed(void) __attribute__ ((alias("usbotghs_get_speed")));
 
 
