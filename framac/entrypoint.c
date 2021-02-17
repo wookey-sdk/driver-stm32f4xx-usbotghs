@@ -174,6 +174,7 @@ void test_fcn_driver_eva(void)
     uint32_t size = Frama_C_interval_32(64,4096);
     usbotghs_epx_mpsize_t size_ep = Frama_C_interval_8(0,3);
     usbotghs_dev_mode_t mode = Frama_C_interval_8(0,1);
+    usbotghs_ep_type_t type_ep = Frama_C_interval_8(0,3);
 
     uint8_t src = 1 ;
 
@@ -181,7 +182,7 @@ void test_fcn_driver_eva(void)
     usbotghs_ep_type_t type = Frama_C_interval_8(0,3);
     usbotghs_ep_state_t state = Frama_C_interval_8(0,9) ;
 
-    usbotghs_get_ep_mpsize();
+    usbotghs_get_ep_mpsize(type_ep);
     usbotghs_get_speed();
     usbotghs_global_stall() ;
     usbotghs_endpoint_set_nak(ep_id, dir) ;
