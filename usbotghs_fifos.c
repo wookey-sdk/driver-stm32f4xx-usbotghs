@@ -50,7 +50,7 @@
   @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
 
   @ requires \separated(&usbotghs_ctx,&num_ctx,&SIZE_DESC_FIXED,&FLAG,
-                         ctx_list+(..),dest+(..));
+                         dest+(..));
   @ assigns *(dest + (0 .. size-1));
 
   @ behavior badep:
@@ -382,7 +382,7 @@ err:
 /*@
   @ requires 0 <= ep_id < USBOTGHS_MAX_OUT_EP;
   @ requires size > 0;
-  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),&num_ctx,ctx_list+(..));
+  @ requires \separated(&usbotghs_ctx, ((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns usbotghs_ctx.out_eps[ep_id],  *(usbotghs_ctx.out_eps[ep_id].fifo+(usbotghs_ctx.out_eps[ep_id].fifo_idx..(usbotghs_ctx.out_eps[ep_id].fifo_idx + (size-1))));
 
   @ behavior notconfigured:
@@ -452,7 +452,7 @@ mbed_error_t usbotghs_read_epx_fifo(uint32_t size, uint8_t ep_id)
     /*@ assert \valid(ep); */
     /* @assert \valid(ep->fifo); */
     /* @assert \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),
-           &num_ctx,ctx_list+(..),&usbotghs_ctx,
+           &usbotghs_ctx,
            usbotghs_ctx.out_eps[ep_id].fifo+(0..usbotghs_ctx.out_eps[ep_id].fifo_size)); */
 
     /* TODO: checking that EP is in correct direction before continuing */
@@ -509,7 +509,7 @@ err:
     @ requires \valid(&usbotghs_ctx.in_eps[ep_id].fifo_idx);
     @ requires \valid(&usbotghs_ctx.in_eps[ep_id].fifo_size);
     @ requires \valid(usbotghs_ctx.in_eps[ep_id].fifo+(0..usbotghs_ctx.in_eps[ep_id].fifo_size-1));
-    @ requires \separated( ((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))),(uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK ,&num_ctx,ctx_list+(..),&usbotghs_ctx.in_eps[ep_id].fifo[\at(usbotghs_ctx.in_eps[ep_id].fifo_idx,Pre)],&usbotghs_ctx.in_eps[ep_id]+(0..sizeof(usbotghs_context_t)));
+    @ requires \separated( ((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep_id].id + 1))))),(uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK,&usbotghs_ctx.in_eps[ep_id].fifo[\at(usbotghs_ctx.in_eps[ep_id].fifo_idx,Pre)],&usbotghs_ctx.in_eps[ep_id]+(0..sizeof(usbotghs_context_t)));
 
 
     @ behavior fifolocked:

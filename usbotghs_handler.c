@@ -357,7 +357,7 @@ err:
  * OEPINNT is executed when the TxFIFO has been flushed by the core and content sent
  */
 /*@
-    @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
+    @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
 static mbed_error_t oepint_handler(void)
@@ -478,7 +478,7 @@ err:
  * IEPINT is executed when the RxFIFO has been fully read by the software (in RXFLVL handler)
  */
 /*@
-  @ requires \separated(GHOST_in_eps + (0 .. USBOTGHS_MAX_IN_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),   (usbctrl_context_t *)ctx_list + (0..1),&num_ctx);
+  @ requires \separated(GHOST_in_eps + (0 .. USBOTGHS_MAX_IN_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP - 1].state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
   */
 static mbed_error_t iepint_handler(void)
@@ -652,7 +652,7 @@ err:
  * As a consequence, we only defines the memory separation contsraints and the worst impact (globals updates) of the function.
  */
 /*@
-  @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx,&num_ctx, ctx_list+(..));
+  @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP - 1].state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
   */
 static mbed_error_t rxflvl_handler(void)

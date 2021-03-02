@@ -47,7 +47,7 @@
 /*@
     @ requires is_valid_dev_mode(mode);
     @ requires \separated(&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END),
-        &num_ctx,&SIZE_DESC_FIXED,&FLAG,ctx_list+(..));
+        &num_ctx,&SIZE_DESC_FIXED,&FLAG);
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END))  ;
     @ ensures \result == MBED_ERROR_BUSY || \result == MBED_ERROR_NONE ;
 */
