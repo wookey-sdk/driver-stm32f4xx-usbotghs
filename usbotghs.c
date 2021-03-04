@@ -501,8 +501,10 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
     /* giving these three assertions, next call to usbotghs_write_epx_fifo() should has its
      * preconditions granted. */
+    /* PTH: not needed --> set_xmit_fifo returns MBED_ERROR_NONE means that fifo wasn't lock
+     * at the tie if its execution */
     /* Here are the precodntions of a **valid** set_xmit_fifo() execution: */
-    /*@ assert \at(usbotghs_ctx.in_eps,Pre)[ep_id].fifo_lck == \false; */
+    /*  assert \at(usbotghs_ctx.in_eps,Pre)[ep_id].fifo_lck == \false; */
     /* Here are the postconditions of a **valid** set_xmit_fifo() execution: */
     /*@ assert \valid(ep->fifo+(0..ep->fifo_size-1));*/
     /*@ assert ep->fifo_lck == \false && ep->fifo == src && ep->fifo_idx==0 && ep->fifo_size==size; */
@@ -626,8 +628,10 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
       @ loop invariant \valid(ep->fifo+(0..ep->fifo_size-1));
       @ loop invariant \separated(ep->fifo + (0 .. ep->fifo_size-1), (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
       @ loop invariant fifo_size >0 ;
-      @ loop assigns residual_size, errcode, usbotghs_ctx.in_eps[ep_id].state, residual_size , *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep->id].id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep->id].fifo_idx, usbotghs_ctx.in_eps[ep->id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,LoopEntry)];
+      // loop assigns residual_size, errcode, ep->state , *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep->id].id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep->id].fifo_idx, usbotghs_ctx.in_eps[ep->id].fifo_lck, ep->fifo[\at(ep->fifo_idx,LoopEntry)];
       // no variant as residual_size doesn't decrement harmonicaly to 0
+      //
+      @ loop assigns residual_size, errcode, ep->state , *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)ep->id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), ep->fifo_idx, ep->fifo_lck, ep->fifo[\at(ep->fifo_idx,LoopEntry)];
       // loop variant residual_size ;
 
       */

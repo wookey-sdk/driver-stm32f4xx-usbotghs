@@ -732,9 +732,9 @@ err:
     @ requires usbotghs_ctx.in_eps[epid].configured == \true;
     @ requires \separated(src+(0..size-1),&usbotghs_ctx.in_eps[epid].fifo_lck, &usbotghs_ctx.in_eps[epid].fifo_size,&usbotghs_ctx.in_eps[epid].fifo_idx,&usbotghs_ctx.in_eps[epid].fifo);
     @ ensures \result == MBED_ERROR_NONE ==> (
-       usbotghs_ctx.out_eps[epid].fifo == src &&
-       usbotghs_ctx.out_eps[epid].fifo_size == size &&
-       usbotghs_ctx.out_eps[epid].fifo_idx == 0
+       usbotghs_ctx.in_eps[epid].fifo == src &&
+       usbotghs_ctx.in_eps[epid].fifo_size == size &&
+       usbotghs_ctx.in_eps[epid].fifo_idx == 0
       );
 
     @ behavior fifo_lock:

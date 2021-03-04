@@ -200,6 +200,8 @@ void test_fcn_driver_eva(void)
     usbotghs_get_ep_state(ep_id, dir) ;
 
     usbotghs_send_data((uint8_t *)&resp[0], 512, EP0);
+    usbotghs_send_data((uint8_t *)&resp[0], 16, EP0);
+    usbotghs_send_data((uint8_t *)&resp[0], 19, EP0);
     usbotghs_send_data((uint8_t *)&resp[0], 1024, EP0);
 #if 0
     //usbotghs_ctx.in_eps[EP0].mpsize = Frama_C_interval_16(0,65535);
@@ -269,6 +271,9 @@ void test_fcn_driver_eva(void)
     usbotghs_configure_endpoint(2,type,USB_BACKEND_DRV_EP_DIR_IN, 512,USB_BACKEND_EP_ODDFRAME,&handler_ep);
     usbotghs_set_recv_fifo((uint8_t *)&resp[0], 512, 2);
     usbotghs_activate_endpoint(2, USB_BACKEND_DRV_EP_DIR_IN);
+    usbotghs_send_data((uint8_t *)&resp[0], 64, 2);
+    usbotghs_send_data((uint8_t *)&resp[0], 68, 2);
+    usbotghs_send_data((uint8_t *)&resp[0], 500, 2);
     usbotghs_send_data((uint8_t *)&resp[0], 512, 2);
     /* 4 bytes padding check in write_core_fifo(): */
     usbotghs_send_data((uint8_t *)&resp[0], 513, 2);
