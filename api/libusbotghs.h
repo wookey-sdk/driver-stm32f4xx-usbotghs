@@ -235,11 +235,11 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
     @ requires \separated(src,GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1));
     @ assigns GHOST_in_eps[ep_id].state;
     @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
+    @ ensures ep_id >= USBOTGHS_MAX_IN_EP ==> GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state == \old(GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state);
 
     @ behavior bad_ep:
     @   assumes (ep_id >= USBOTGHS_MAX_IN_EP) ;
     @   ensures \result == MBED_ERROR_INVPARAM ;
-    @   assigns \nothing;
 
     @ behavior bad_src:
     @   assumes (ep_id < USBOTGHS_MAX_IN_EP) ;

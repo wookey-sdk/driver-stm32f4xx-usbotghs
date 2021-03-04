@@ -432,12 +432,9 @@ TODO : add specification for !CONFIG_USR_DRV_USBOTGHS_MODE_DEVICE
 */
 
 /*@
- @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1),&GHOST_opaque_drv_privates, src,&usbotghs_ctx, (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+ @ requires \separated(GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1),&GHOST_opaque_drv_privates,&usbotghs_ctx, src + (0 .. size-1), (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
 
- @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[ep_id], *(usbotghs_ctx.in_eps[ep_id].fifo+(usbotghs_ctx.in_eps[ep_id].fifo_idx..(usbotghs_ctx.in_eps[ep_id].fifo_idx + (512 - 1))));
- @ assigns usbotghs_ctx.in_eps[ep_id].state,  *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,Pre)];
-
-    @  @   assigns  usbotghs_ctx.in_eps[ep_id].fifo,usbotghs_ctx.in_eps[ep_id].fifo_lck,usbotghs_ctx.in_eps[ep_id].fifo_idx, usbotghs_ctx.in_eps[ep_id].fifo_size, *((uint32_t *)((0x40040000 + 0x910) + (int)ep_id * 0x20)), *((uint32_t *)((0x40040000 + 0x900) + (int)ep_id * 0x20)) , usbotghs_ctx.in_eps[ep_id].state;
+ @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep_id], usbotghs_ctx.in_eps[ep_id].fifo, usbotghs_ctx.in_eps[ep_id].fifo_lck, usbotghs_ctx.in_eps[ep_id].fifo_idx,usbotghs_ctx.in_eps[ep_id].fifo_size, usbotghs_ctx.in_eps[ep_id].state;
 
 
  // private function contract
@@ -587,7 +584,8 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 #else
         /*@
           @ loop invariant 0<=cpt<= CPT_HARD;
-          @ loop assigns cpt;
+          @ loop invariant \separated(ep->fifo + (0 .. ep->fifo_size-1), (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+          @ loop assigns cpt, errcode;
           @ loop variant CPT_HARD - cpt ;
           */
         for (uint8_t cpt=0; cpt<CPT_HARD; cpt++)
@@ -623,16 +621,15 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
     /*
      * First, we push FIFO size multiple into the FIFO
      */
-#ifdef __FRAMAC__
-    uint8_t cpt = 0;
-#endif
-    //
     /* this loop doesn't have loop invariant for loop counters as there is no sequencial decrement upto 0 with a step of 1 */
     /*@
-      @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
+      @ loop invariant \valid(ep->fifo+(0..ep->fifo_size-1));
+      @ loop invariant \separated(ep->fifo + (0 .. ep->fifo_size-1), (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
       @ loop invariant fifo_size >0 ;
-      @ loop assigns  errcode, cpt,usbotghs_ctx.in_eps[ep_id].state, residual_size, *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].id + 1))))), *((uint32_t *)((0x40040000 + 0x910) + (int)(usbotghs_ctx.in_eps[ep_id].id * 0x20))), usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,LoopEntry)];
-      @ loop variant residual_size ;
+      @ loop assigns residual_size, errcode, usbotghs_ctx.in_eps[ep_id].state, residual_size , *((uint32_t *)((int)(0x40040000 + (int)(0x1000 * (int)((int)usbotghs_ctx.in_eps[ep->id].id + 1))))), *((uint32_t *) r_CORTEX_M_USBOTG_HS_GINTMSK), usbotghs_ctx.in_eps[ep->id].fifo_idx, usbotghs_ctx.in_eps[ep->id].fifo_lck, usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo[\at(usbotghs_ctx.in_eps[usbotghs_ctx.in_eps[ep_id].id].fifo_idx,LoopEntry)];
+      // no variant as residual_size doesn't decrement harmonicaly to 0
+      // loop variant residual_size ;
+
       */
     while (residual_size >= fifo_size) {
       /*@ assert residual_size >= fifo_size; */
@@ -648,11 +645,13 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
         /*@
           @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
+          @ loop invariant \separated(ep->fifo + (0 .. ep->fifo_size-1), (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
+          @ loop invariant fifo_size >0 ;
           @ loop invariant 0<=cpt<= CPT_HARD ;
-          @ loop assigns cpt ;
+          @ loop assigns cpt, errcode ;
           @ loop variant CPT_HARD - cpt ;
           */
-        for(cpt=0; cpt<CPT_HARD; cpt++)
+        for(uint32_t cpt=0; cpt<CPT_HARD; cpt++)
         {
             if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV) < (fifo_size / 4)) {
                 if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
@@ -684,10 +683,13 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
         //usbotghs_wait_for_xmit_complete(ep);
         residual_size -= fifo_size;
-	/*@ assert residual_size >= 0; */
-	/*@ assert residual_size == \at(residual_size,LoopCurrent) - fifo_size ;*/
+	    /*@ assert residual_size >= 0; */
+	    /*  assert residual_size == \at(residual_size,LoopCurrent) - fifo_size ;*/
         log_printf("[USBOTG][HS] EP: %d: residual: %d\n", ep_id, residual_size);
     }
+
+    /*@ assert residual_size >= 0; */
+    /*@ assert residual_size < fifo_size; */
     /* Now, if there is residual size shorter than FIFO size, just send it */
     if (residual_size > 0) {
         /* wait while there is enough space in TxFIFO */
@@ -697,12 +699,12 @@ mbed_error_t usbotghs_send_data(uint8_t *src, uint32_t size, uint8_t ep_id)
 
             /*@
               @ loop invariant \valid(ep->fifo+(0..ep->fifo_size));
+              @ loop invariant \separated(ep->fifo + (0 .. ep->fifo_size-1), (uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END));
               @ loop invariant 0<=cpt<= CPT_HARD ;
-              @ loop assigns cpt ;
+              @ loop assigns cpt, errcode ;
               @ loop variant CPT_HARD - cpt;
               */
-
-        for(cpt=0; cpt<CPT_HARD; cpt++){
+        for(uint32_t cpt=0; cpt<CPT_HARD; cpt++){
             if (get_reg(r_CORTEX_M_USBOTG_HS_DTXFSTS(ep_id), USBOTG_HS_DTXFSTS_INEPTFSAV)  < ((residual_size / 4) + (residual_size & 3 ? 1 : 0))) {
 #endif
                if (get_reg(r_CORTEX_M_USBOTG_HS_DSTS, USBOTG_HS_DSTS_SUSPSTS)){
