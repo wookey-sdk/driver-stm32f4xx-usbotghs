@@ -123,7 +123,10 @@ static volatile uint32_t    usbotghs_int_cnt[32] = { 0 };
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t default_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t default_handler(void)
 {
     return MBED_ERROR_NONE;
 }
@@ -135,7 +138,10 @@ static mbed_error_t default_handler(void)
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t reserved_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t reserved_handler(void)
 {
     return MBED_ERROR_UNSUPORTED_CMD;
 }
@@ -186,7 +192,10 @@ static mbed_error_t reserved_handler(void)
   @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.fifo_idx, usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1], usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
-static mbed_error_t reset_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t reset_handler(void)
 {
     log_printf("[USB HS][RESET] received USB Reset\n");
     mbed_error_t errcode = MBED_ERROR_NONE;
@@ -293,7 +302,10 @@ err:
   @ requires \separated(((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.speed;
   */
-static mbed_error_t enumdone_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t enumdone_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
@@ -360,7 +372,10 @@ err:
     @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP-1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
     @ assigns *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)),GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP-1].state, usbotghs_ctx.out_eps[0 .. USBOTGHS_MAX_OUT_EP-1];
   */
-static mbed_error_t oepint_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t oepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
@@ -481,7 +496,10 @@ err:
   @ requires \separated(GHOST_in_eps + (0 .. USBOTGHS_MAX_IN_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)));
   @ assigns GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP - 1].state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx.in_eps[0 .. USBOTGHS_MAX_IN_EP-1];
   */
-static mbed_error_t iepint_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t iepint_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     usbotghs_context_t *ctx = usbotghs_get_context();
@@ -655,7 +673,10 @@ err:
   @ requires \separated(GHOST_out_eps+(0 .. USBOTGHS_MAX_OUT_EP - 1),((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), &usbotghs_ctx);
   @ assigns GHOST_out_eps[0 .. USBOTGHS_MAX_OUT_EP - 1].state, *((uint32_t *) (USB_BACKEND_MEMORY_BASE .. USB_BACKEND_MEMORY_END)), usbotghs_ctx;
   */
-static mbed_error_t rxflvl_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t rxflvl_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 	uint32_t grxstsp;
@@ -883,7 +904,10 @@ err:
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t sof_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t sof_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
@@ -893,7 +917,10 @@ static mbed_error_t sof_handler(void)
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t otg_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t otg_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
@@ -903,7 +930,10 @@ static mbed_error_t otg_handler(void)
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t mmism_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t mmism_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
@@ -917,7 +947,10 @@ static mbed_error_t mmism_handler(void)
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t esuspend_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t esuspend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
 
@@ -934,7 +967,10 @@ static mbed_error_t esuspend_handler(void)
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t ususpend_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t ususpend_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* we must inform the control layer that we should enter suspend state as
@@ -951,7 +987,10 @@ static mbed_error_t ususpend_handler(void)
 /*@
   @ assigns \nothing;
   */
-static mbed_error_t resume_handler(void)
+#ifndef __FRAMAC__
+static
+#endif
+mbed_error_t resume_handler(void)
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     /* we must inform the control layer that we should enter suspend state as
