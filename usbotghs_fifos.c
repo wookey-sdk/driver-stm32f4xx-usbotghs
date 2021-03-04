@@ -612,6 +612,13 @@ err:
 
   @ ensures (\valid(dst) && epid < USBOTGHS_MAX_OUT_EP && (usbotghs_ctx.out_eps[epid].configured == \true && usbotghs_ctx.out_eps[epid].mpsize > 0) && size > 0 && usbotghs_ctx.out_eps[epid].fifo_lck == \false) ==> \result == MBED_ERROR_NONE;
 
+  @ ensures \result == MBED_ERROR_NONE ==> (
+     usbotghs_ctx.out_eps[epid].fifo == dst &&
+     usbotghs_ctx.out_eps[epid].fifo_size == size &&
+     usbotghs_ctx.out_eps[epid].fifo_idx == 0
+     );
+
+
   */
 mbed_error_t usbotghs_set_recv_fifo(uint8_t *dst, uint32_t size, uint8_t epid)
 {
@@ -724,6 +731,11 @@ err:
     @ requires \valid_read(src+(0..size-1));
     @ requires usbotghs_ctx.in_eps[epid].configured == \true;
     @ requires \separated(src+(0..size-1),&usbotghs_ctx.in_eps[epid].fifo_lck, &usbotghs_ctx.in_eps[epid].fifo_size,&usbotghs_ctx.in_eps[epid].fifo_idx,&usbotghs_ctx.in_eps[epid].fifo);
+    @ ensures \result == MBED_ERROR_NONE ==> (
+       usbotghs_ctx.out_eps[epid].fifo == src &&
+       usbotghs_ctx.out_eps[epid].fifo_size == size &&
+       usbotghs_ctx.out_eps[epid].fifo_idx == 0
+      );
 
     @ behavior fifo_lock:
     @   assumes (usbotghs_ctx.in_eps[epid].fifo_lck == \true)  ;
