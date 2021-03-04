@@ -49,7 +49,7 @@
   @ requires \valid(dest + (0 .. size-1));
   @ requires (uint32_t *)USB_BACKEND_MEMORY_BASE <= USBOTG_HS_DEVICE_FIFO(ep) <= (uint32_t *)USB_BACKEND_MEMORY_END ;
 
-  @ requires \separated(&usbotghs_ctx,&num_ctx,&SIZE_DESC_FIXED,&FLAG,
+  @ requires \separated(&usbotghs_ctx,&GHOST_num_ctx,
                          dest+(..));
   @ assigns *(dest + (0 .. size-1));
 
