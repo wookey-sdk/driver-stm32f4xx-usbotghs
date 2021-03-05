@@ -403,6 +403,7 @@ void test_fcn_isr_events(void)
     usbotghs_activate_endpoint(3, USB_BACKEND_DRV_EP_DIR_IN);
     usbotghs_activate_endpoint(3, USB_BACKEND_DRV_EP_DIR_OUT);
     usbotghs_set_recv_fifo(&resp[0], 128, 3);
+    usbotghs_send_data((uint8_t *)&resp[0], 128, 3);
     usbotghs_send_zlp(3);
 
     return;

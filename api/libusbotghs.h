@@ -232,7 +232,7 @@ mbed_error_t usbotghs_configure(usbotghs_dev_mode_t mode,
  * core FIFO, or MBED_ERROR_BUSY if the interal core FIFO for the given EP is full
  */
 /*@
-    @ requires \separated(src,GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1));
+    @ requires \separated(src + (0 .. size-1),GHOST_in_eps+(0 .. USBOTGHS_MAX_IN_EP - 1));
     @ assigns GHOST_in_eps[ep_id].state;
     @ assigns \result \from indirect:ep_id, indirect:src, indirect:size;
     @ ensures ep_id >= USBOTGHS_MAX_IN_EP ==> GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state == \old(GHOST_in_eps[0 .. USBOTGHS_MAX_IN_EP-1].state);
